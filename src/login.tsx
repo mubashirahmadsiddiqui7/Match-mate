@@ -14,9 +14,12 @@ import {
 } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
 
+type loginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 const Login = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<loginScreenNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -245,6 +248,8 @@ const styles = StyleSheet.create({
     height: 350,
     alignSelf: 'center',
     margin: 70,
+    marginTop: -10,
+    marginBottom: 18,
   }
 });
 

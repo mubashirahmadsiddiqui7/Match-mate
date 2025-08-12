@@ -18,8 +18,12 @@ import {
   launchImageLibrary,
 } from 'react-native-image-picker';
 import RadioGroup from 'react-native-radio-buttons-group';
+import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
 
 const SignUp = () => {
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Login'>>();
   const [name, setName] = useState('');
   const [cnic, setCnic] = useState('');
   const [job, setJob] = useState<string | undefined>(undefined);
@@ -293,6 +297,7 @@ const SignUp = () => {
                     setPassword('');
                     setConfirmPassword('');
                     setErrors({});
+                    navigation.goBack();
                   }}
                   color="#000000"
                 />
