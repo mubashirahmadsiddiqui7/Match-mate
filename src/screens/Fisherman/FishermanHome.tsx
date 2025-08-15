@@ -10,12 +10,18 @@ import {
   Alert,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
 import { logout } from '../../redux/actions/authActions';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
+// 👇 type-only import to avoid circular runtime import
+
+type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishermanHome'>;
+
 
 const FishermanHome = () => {
   const dispatch = useDispatch();
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
 
   const handleLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to log out?', [
@@ -67,7 +73,7 @@ const FishermanHome = () => {
 
         {/* Action buttons */}
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Trip')}>
             <Image
               source={require('../../assets/images/boatIcon.png')}
               style={styles.icon}
@@ -75,7 +81,7 @@ const FishermanHome = () => {
             <Text style={styles.buttonText}>Trips</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Lots')}>
             <Image
               source={require('../../assets/images/fishIcon.png')}
               style={styles.icon}
