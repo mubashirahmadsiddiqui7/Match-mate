@@ -14,7 +14,6 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import { s } from './styles';
 import { buildTripId } from '../../../utils/ids';
@@ -114,23 +113,17 @@ export default function AddTripScreen() {
       <View style={[s.page, { flex: 1 }]}>
         {/* Hero / header */}
         <View style={[s.hero, { backgroundColor: HEADER_BG }]}>
-          {/* Back button (in-screen, since header is hidden) */}
           <View style={styles.topRow}>
             <Pressable
               onPress={handleBack}
               style={({ pressed }) => [
                 styles.backBtn,
-                pressed && styles.backBtnPressed,
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
               ]}
-              android_ripple={{
-                color: 'rgba(255,255,255,0.25)',
-                borderless: true,
-              }}
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              hitSlop={10}
             >
-              <MaterialIcons name="wallet-outline" size={24} color="#FFFFFF" />
+              <Text style={styles.backIcon}>←</Text>
             </Pressable>
           </View>
 
@@ -205,7 +198,7 @@ export default function AddTripScreen() {
 const styles = StyleSheet.create({
   topRow: {
     position: 'absolute',
-    top: 8,
+    top: 5,
     left: 12,
     right: 12,
     flexDirection: 'row',
@@ -214,17 +207,15 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    paddingVertical: 6,
+    paddingHorizontal:6,
+    borderRadius: 22,
   },
-  backBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
+  backIcon: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: 'bold',
+
   },
 });

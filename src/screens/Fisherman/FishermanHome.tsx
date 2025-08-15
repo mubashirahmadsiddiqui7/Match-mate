@@ -141,7 +141,7 @@ const FishermanHome = () => {
 
         <View style={styles.grid}>
           <ActionCard
-            label="Trips"
+            label="+ New Trips"
             iconSource={require('../../assets/images/boatIcon.png')}
             onPress={() => navigation.navigate('Trip')}
           />
