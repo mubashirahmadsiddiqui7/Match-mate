@@ -83,6 +83,16 @@ export const s = StyleSheet.create({
   locText: { fontSize: 14, color: theme.text, marginBottom: 8 },
   btnGhost: {
     height: 44,
+    
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+   btnGhost1: {
+    height: 44,
+    width:'100%',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.blue,

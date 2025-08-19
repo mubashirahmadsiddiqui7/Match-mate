@@ -1,15 +1,21 @@
 import { api } from './https';
 
 export type CreateLotBody = {
-  trip_id: number;           // server trip id
-  species: string;
-  weight: number;            // kg
-  grade?: string;
-  price_per_kg?: number;
+  lot_no: string;                 // e.g. "LOT-20250819-003"
+  trip_id: number;                // numeric trip id
+  species: string;                // e.g. "Tuna"
+  weight_kg: number;              // e.g. 200
+  grade: string;                  // e.g. "A" | "B" | "C"
+  port_location?: string | null;
+  gps_latitude?: number | string | null;
+  gps_longitude?: number | string | null;
+  captured_at?: string;           // ISO is OK, server formats to Z
+  photos?: any;                   // optional
+  metadata?: any;                 // optional
 };
 
 export async function createLot(body: CreateLotBody) {
-  const json = await api('/lots', { method: 'POST', body });
+  const json = await api('/fish-lots', { method: 'POST', body });
   return json?.data ?? json;
 }
 

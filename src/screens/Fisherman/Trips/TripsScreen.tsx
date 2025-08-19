@@ -43,49 +43,6 @@ type TripRow = {
   departure_time?: string | null; // display string e.g. "2025-08-20 08:43 AM"
 };
 
-const DUMMY_TRIPS: TripRow[] = [
-  {
-    id: 101,
-    trip_name: 'TRIP-20250819-001',
-    status: 'pending',
-    departure_port: 'Gwadar',
-    destination_port: 'Keti Bandar',
-    departure_time: '2025-08-20 08:43 AM',
-  },
-  {
-    id: 102,
-    trip_name: 'TRIP-20250818-004',
-    status: 'approved',
-    departure_port: 'Karachi',
-    destination_port: 'Ormara',
-    departure_time: '2025-08-22 06:15 AM',
-  },
-  {
-    id: 103,
-    trip_name: 'TRIP-20250817-012',
-    status: 'active',
-    departure_port: 'Keti Bandar',
-    destination_port: 'Pasni',
-    departure_time: '2025-08-19 05:30 AM',
-  },
-  {
-    id: 104,
-    trip_name: 'TRIP-20250810-020',
-    status: 'completed',
-    departure_port: 'Gwadar',
-    destination_port: 'Karachi',
-    departure_time: '2025-08-11 07:10 AM',
-  },
-  {
-    id: 105,
-    trip_name: 'TRIP-20250805-009',
-    status: 'cancelled',
-    departure_port: 'Ormara',
-    destination_port: 'Gwadar',
-    departure_time: '2025-08-06 09:00 AM',
-  },
-];
-
 const STATUS_COLORS: Record<TripRow['status'], string> = {
   pending: PALETTE.warn,
   approved: PALETTE.info,

@@ -25,13 +25,13 @@ export default function PhotoCard({
       )}
 
       <View style={s.photoActions}>
-        <TouchableOpacity style={s.btnGhost} onPress={takePhoto}>
+        {/* <TouchableOpacity style={s.btnGhost} onPress={takePhoto}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <MaterialIcons name="photo-camera" size={18} color={theme.blue} />
             <Text style={s.btnGhostText}>Take Photo</Text>
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.btnGhost} onPress={pickFromGallery}>
+        </TouchableOpacity> */}
+        <TouchableOpacity style={s.btnGhost1} onPress={pickFromGallery}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <MaterialIcons name="image" size={18} color={theme.blue} />
             <Text style={s.btnGhostText}>Choose</Text>
