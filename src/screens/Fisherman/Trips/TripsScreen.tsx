@@ -16,23 +16,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { listTripsPage } from '../../../services/trips';
-
-// import { listTrips } from '../../../services/trips'; // ← wire this later
-
-const PALETTE = {
-  green700: '#1B5E20',
-  green600: '#2E7D32',
-  green50: '#E8F5E9',
-  text900: '#111827',
-  text700: '#374151',
-  text600: '#4B5563',
-  border: '#E5E7EB',
-  surface: '#FFFFFF',
-  warn: '#EF6C00',
-  info: '#1E88E5',
-  purple: '#6A1B9A',
-  error: '#C62828',
-};
+import PALETTE from '../../../theme/palette';
 
 type TripRow = {
   id: string | number;
@@ -62,13 +46,12 @@ export default function TripsScreen() {
   const handleBack = () => {
     // go back if possible, else fall back to FishermanHome
     // @ts-ignore
-    if (navigation.canGoBack()) navigation.goBack();
-    // @ts-ignore
-    else navigation.navigate('FishermanHome');
+
+    navigation.navigate('FishermanHome');
   };
 
   // load dummy data (swap with API later)
- const loadTrips = useCallback(async () => {
+  const loadTrips = useCallback(async () => {
     setLoading(true);
     try {
       // grab one big page (tweak per_page if you expect many)
@@ -83,61 +66,87 @@ export default function TripsScreen() {
     }
   }, []);
 
-  useEffect(() => { loadTrips(); }, [loadTrips]);
+  useEffect(() => {
+    loadTrips();
+  }, [loadTrips]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return trips.filter(t => {
-      const okStatus = statusFilter === 'all' ? true : t.status === statusFilter;
+      const okStatus =
+        statusFilter === 'all' ? true : t.status === statusFilter;
       if (!okStatus) return false;
       if (!q) return true;
       const hay = [
         t.trip_name,
         t.departure_port ?? '',
-        t.destination_port ?? '',
+        // t.destination_port ?? '',
         t.status,
         t.departure_time ?? '',
-      ].join(' ').toLowerCase();
+      ]
+        .join(' ')
+        .toLowerCase();
       return hay.includes(q);
     });
   }, [trips, search, statusFilter]);
 
+  function toTitle(s: string) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
   const renderItem = ({ item }: { item: TripRow }) => {
     const color = STATUS_COLORS[item.status];
     return (
-      <View style={styles.card}>
+      <Pressable
+        onPress={() => navigation.navigate('TripDetails', { id: item.id })}
+        style={({ pressed }) => [styles.card, pressed && { opacity: 0.93 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open trip ${item.trip_name}`}
+      >
+        {/* Top row: Trip ID + status pill */}
         <View style={styles.cardTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {item.trip_name}
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.trip_name}
+          </Text>
+
+          <View
+            style={[
+              styles.badge,
+              { borderColor: color, backgroundColor: '#fff' },
+            ]}
+          >
+            <View style={[styles.badgeDot, { backgroundColor: color }]} />
+            <Text style={[styles.badgeText, { color }]}>
+              {toTitle(item.status)}
             </Text>
-            <Text style={styles.cardSub} numberOfLines={1}>
-              {(item.departure_port || '—') +
-                ' → ' +
-                (item.destination_port || '—')}
-            </Text>
-            <Text style={styles.cardTime} numberOfLines={1}>
-              {item.departure_time || '—'}
-            </Text>
-          </View>
-          <View style={[styles.badge, { borderColor: color }]}>
-            <Text style={[styles.badgeText, { color }]}>{item.status}</Text>
           </View>
         </View>
 
-        <View style={styles.cardActions}>
-          <Pressable
-            onPress={() => Alert.alert('Trip', item.trip_name)}
-            style={({ pressed }) => [
-              styles.btn,
-              styles.btnGhost,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <Text style={styles.btnGhostText}>Open</Text>
-          </Pressable>
+        {/* Route row */}
+        <View style={styles.routeRow}>
+          <Icon name="place" size={16} color={PALETTE.text600} />
+          <Text style={styles.routeText} numberOfLines={1}>
+            {item.departure_port || 'Unknown'}
+          </Text>
+          
         </View>
-      </View>
+
+        {/* Time row */}
+        <View style={styles.timeRow}>
+          <Icon name="schedule" size={16} color={PALETTE.text600} />
+          <Text style={styles.cardTime} numberOfLines={1}>
+            {item.departure_time || 'Time not set'}
+          </Text>
+        </View>
+
+        {/* Footer action (simple, right‑aligned) */}
+        <View style={styles.cardActions}>
+          <View style={styles.openBtn}>
+            <Text style={styles.openBtnText}>Open</Text>
+            <Icon name="chevron-right" size={18} color={PALETTE.text900} />
+          </View>
+        </View>
+      </Pressable>
     );
   };
 
@@ -311,25 +320,73 @@ const styles = StyleSheet.create({
     padding: 12,
     ...shadow(0.05, 8, 3),
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: PALETTE.text900 },
-  cardSub: { marginTop: 2, fontSize: 12, color: PALETTE.text600 },
-  cardTime: { marginTop: 2, fontSize: 12, color: PALETTE.text700 },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: PALETTE.text900,
+    flex: 1,
+  },
+
+  routeRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeText: {
+    marginLeft: 6,
+    color: PALETTE.text700,
+    fontWeight: '700',
+    maxWidth: '44%',
+  },
+
+  timeRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardTime: { color: PALETTE.text700, fontWeight: '600' },
 
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1.5,
+  },
+  badgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
   },
   badgeText: { fontSize: 12, fontWeight: '800' },
 
   cardActions: {
     marginTop: 10,
     flexDirection: 'row',
-    gap: 8,
     justifyContent: 'flex-end',
   },
+  openBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+  },
+  openBtnText: { color: PALETTE.text900, fontWeight: '800' },
+
   btn: {
     paddingHorizontal: 12,
     paddingVertical: 9,

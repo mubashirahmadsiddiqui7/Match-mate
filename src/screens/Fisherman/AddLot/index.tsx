@@ -1,16 +1,15 @@
-/* eslint-disable react-native/no-inline-styles */
+/* src/screens/Fisherman/AddLot/index.tsx */
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FormProvider, useForm } from 'react-hook-form';
-import { useDispatch } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
-// import { createLot } from '../../../redux/actions/lotApiActions';
 import { buildLotNo } from '../../../utils/ids';
 
 import { s, theme } from './styles';
@@ -24,13 +23,19 @@ import SaveBar from './components/SaveBar';
 import FocusAwareStatusBar from './components/FocusAwareStatusBar';
 import DropdownField from '../AddTrip/components/fields/DropdownField';
 import { api } from '../../../services/https';
-import { createLot, type CreateLotBody  } from '../../../services/lots';
+import {
+  createLot,
+  type CreateLotBody,
+  fetchFishLotById,
+  type FishLotById,
+} from '../../../services/lots';
+import { updateLot } from '../../../services/lots'; // ⬅️ new
 
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'Lots'>;
 type LotsRoute = RouteProp<FishermanStackParamList, 'Lots'>;
 
 interface FormValues {
-  tripId?: string | number;     // <-- add selected trip id here
+  tripId?: string | number;
   species: string;
   weightKg: string;
   grade: string;
@@ -38,37 +43,26 @@ interface FormValues {
 
 type TripRow = {
   id: number | string;
-  trip_id: string; // e.g., "TRIP-20250819-001"
+  trip_id: string;
   status?: string;
   departure_port?: string | null;
   destination_port?: string | null;
   departure_time?: string | null;
 };
-
-const PALETTE = {
-  green700: '#1B5E20',
-  green600: '#2E7D32',
-  green50: '#E8F5E9',
-  text900: '#111827',
-  text700: '#374151',
-  text600: '#4B5563',
-  border: '#E5E7EB',
-  surface: '#FFFFFF',
-  warn: '#EF6C00',
-  info: '#1E88E5',
-  purple: '#6A1B9A',
-  error: '#C62828',
-};
-
+ 
 export default function AddLotScreen() {
-  const dispatch = useDispatch();
   const navigation = useNavigation<Nav>();
   const route = useRoute<LotsRoute>();
-  const routeTripId = route.params?.tripId; // may be undefined
+
+  // Are we editing?
+  const isEdit = (route.params as any)?.mode === 'edit';
+  const editingLotId = isEdit ? (route.params as any).lotId : undefined;
+
+  const routeTripId = !isEdit ? (route.params as any)?.tripId : undefined;
 
   const methods = useForm<FormValues>({
     defaultValues: {
-      tripId: routeTripId ?? undefined,   // preselect if passed from Trip screen
+      tripId: routeTripId ?? undefined,
       species: '',
       weightKg: '',
       grade: '',
@@ -76,7 +70,7 @@ export default function AddLotScreen() {
     mode: 'onTouched',
   });
 
-  const [lotNo] = useState(buildLotNo());
+  const [lotNo, setLotNo] = useState(buildLotNo());
   const { gps, loading: locLoading, recapture } = useCurrentLocation();
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
 
@@ -84,41 +78,15 @@ export default function AddLotScreen() {
   const [trips, setTrips] = useState<TripRow[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const [editingLot, setEditingLot] = useState<FishLotById | null>(null);
 
-  // Build dropdown options
-  const tripOptions = useMemo(
-    () =>
-      trips.map(t => ({
-        label: t.trip_id,      // visible string
-        value: t.id,           // numeric/string id used for API
-      })),
-    [trips],
-  );
-
-  // Pretty label for review row
-  const selectedTripValue = methods.watch('tripId');
-  const selectedTripLabel = useMemo(() => {
-    const found = tripOptions.find(
-      o => String(o.value) === String(selectedTripValue ?? ''),
-    );
-    return found?.label;
-  }, [tripOptions, selectedTripValue]);
-
-  // Weight validation
-  const weightValue = methods.watch('weightKg');
-  const weightValid = useMemo(() => {
-    const n = Number(weightValue);
-    return !isNaN(n) && n > 0;
-  }, [weightValue]);
-
-  // Load trips from the provided external API
+  // Load trips
   const loadTrips = useCallback(async () => {
     setLoadingTrips(true);
     try {
-      const res = await api('https://smartaisoft.com/MFD-Trace-Fish/api/trips', {
+      const res = await api('http://192.168.18.44:8000/api/trips', {
         query: { page: 1, per_page: 100 },
       });
-      // shape: { success, data: { data: Trip[], ...pagination } }
       const rows: TripRow[] = (res?.data?.data ?? []).map((t: any) => ({
         id: t.id,
         trip_id: t.trip_id,
@@ -129,7 +97,6 @@ export default function AddLotScreen() {
       }));
       setTrips(rows);
     } catch (e: any) {
-      console.log('[AddLotScreen] trips load failed:', e?.message || e);
       Alert.alert('Error', e?.message || 'Failed to load trips');
       setTrips([]);
     } finally {
@@ -141,85 +108,134 @@ export default function AddLotScreen() {
     loadTrips();
   }, [loadTrips]);
 
-  // const onSave = methods.handleSubmit(values => {
-  //   const effectiveTripId = values.tripId ?? routeTripId;
-  //   if (!effectiveTripId) {
-  //     Alert.alert('Trip required', 'Please select a trip to link this lot.');
-  //     return;
-  //   }
-  //   if (!gps) {
-  //     Alert.alert('Location required', 'Please capture location before saving.');
-  //     return;
-  //   }
+  // If editing, load lot and prefill
+  useEffect(() => {
+    if (!isEdit || !editingLotId) return;
+    (async () => {
+      try {
+        const dto = await fetchFishLotById(editingLotId);
+        setEditingLot(dto);
 
-  //   const lotDraft = {
-  //     lotNo,
-  //     tripId: Number(effectiveTripId),
-  //     species: values.species.trim(),
-  //     grade: values.grade.trim(),
-  //     weightKg: Number(values.weightKg),
-  //     capturedAt: new Date().toISOString(),
-  //     gps,
-  //     photoLocalPath: photoUri || undefined,
-  //     _dirty: true,
-  //   };
+        // prefill form + lot no
+        setLotNo(dto.lot_no || buildLotNo());
+        methods.reset({
+          tripId: dto.trip_id,
+          species: dto.species ?? '',
+          weightKg: dto.weight_kg ? String(dto.weight_kg) : '',
+          grade: dto.grade ?? '',
+        });
+      } catch (e: any) {
+        Alert.alert('Error', e?.message || 'Failed to load lot');
+        navigation.goBack();
+      }
+    })();
+  }, [isEdit, editingLotId, methods, navigation]);
 
-  //   dispatch<any>(createLot(lotDraft));
-  //   Alert.alert('Saved', `Lot ${lotNo} saved.`, [{ text: 'OK' }]);
-  // });
+  // dropdown & validations
+  const tripOptions = useMemo(
+    () =>
+      trips.map(t => ({ label: t.trip_id, value: t.id })),
+    [trips]
+  );
 
+  const selectedTripValue = methods.watch('tripId');
+  const selectedTripLabel = useMemo(() => {
+    const found = tripOptions.find(
+      o => String(o.value) === String(selectedTripValue ?? '')
+    );
+    return found?.label;
+  }, [tripOptions, selectedTripValue]);
+
+  const weightValue = methods.watch('weightKg');
+  const weightValid = useMemo(() => {
+    const n = Number(weightValue);
+    return !isNaN(n) && n > 0;
+  }, [weightValue]);
+
+  // Save handler (create OR update)
   const onSave = methods.handleSubmit(async values => {
-  const effectiveTripId = methods.getValues('tripId') ?? tripId;
-  if (!effectiveTripId) {
-    Alert.alert('Trip required', 'Please select a trip to link this lot.');
-    return;
-  }
-  if (!gps) {
-    Alert.alert('Location required', 'Please capture location before saving.');
-    return;
-  }
-  if (!values.species?.trim() || !values.grade?.trim() || Number(values.weightKg) <= 0) {
-    Alert.alert('Missing info', 'Please fill species, grade, and a weight > 0.');
-    return;
-  }
+    const effectiveTripId = methods.getValues('tripId');
+    if (!effectiveTripId) {
+      Alert.alert('Trip required', 'Please select a trip to link this lot.');
+      return;
+    }
+    if (!gps) {
+      Alert.alert('Location required', 'Please capture location before saving.');
+      return;
+    }
+    if (!values.species?.trim() || !values.grade?.trim() || Number(values.weightKg) <= 0) {
+      Alert.alert('Missing info', 'Please fill species, grade, and a weight > 0.');
+      return;
+    }
 
-  const body: CreateLotBody = {
-    lot_no: lotNo,
-    trip_id: Number(effectiveTripId),
-    species: values.species.trim(),
-    weight_kg: Number(values.weightKg),
-    grade: values.grade.trim(),
-    // optional extras if you want to send them:
-    gps_latitude: gps.lat,
-    gps_longitude: gps.lng,
-    captured_at: new Date().toISOString(),
-    // port_location: 'Karachi Port', // provide if you collect it
-  };
+    const body: CreateLotBody = {
+      lot_no: lotNo,
+      trip_id: Number(effectiveTripId),
+      species: values.species.trim(),
+      weight_kg: Number(values.weightKg),
+      grade: values.grade.trim(),
+      gps_latitude: gps.lat,
+      gps_longitude: gps.lng,
+      captured_at: new Date().toISOString(),
+    };
 
-  try {
-    setSaving(true);
-    const created = await createLot(body);
-    console.log('[createLot] success:', created);
-    Alert.alert('Saved', `Lot ${lotNo} created successfully.`, [{ text: 'OK' }]);
-    // (optional) reset fields
-    methods.reset({ tripId: effectiveTripId, species: '', weightKg: '', grade: '' });
-  } catch (err: any) {
-    console.error('[createLot] error:', err?.response || err);
-    Alert.alert('Failed', err?.message || 'Could not create lot.');
-  } finally {
-    setSaving(false);
-  }
-});
+    try {
+      setSaving(true);
 
+      if (isEdit && editingLotId) {
+        // guard: only allow update for pending
+        const isPending = editingLot?.status?.toLowerCase() === 'pending';
+        if (!isPending) {
+          Alert.alert('Not Allowed', 'Verified lots cannot be edited.');
+          return;
+        }
+
+        const updated = await updateLot(editingLotId, body);
+        Alert.alert(
+          'Updated',
+          `Lot ${updated?.lot_no || lotNo} updated successfully.`,
+          [
+            {
+              text: 'OK',
+              onPress: () =>
+                // back to details and refresh it
+                navigation.navigate('LotsList'),
+            },
+          ],
+        );
+      } else {
+        const created = await createLot(body);
+        Alert.alert(
+          'Saved',
+          `Lot ${created?.lot_no || lotNo} created successfully.`,
+          [{ text: 'OK', onPress: () => navigation.navigate('FishermanHome') }],
+        );
+        methods.reset({
+          tripId: effectiveTripId,
+          species: '',
+          weightKg: '',
+          grade: '',
+        });
+        setLotNo(buildLotNo());
+      }
+    } catch (err: any) {
+      Alert.alert('Failed', err?.message || (isEdit ? 'Could not update lot.' : 'Could not create lot.'));
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  // UI labels & disable rules
+  const headerTitle = isEdit ? 'Edit Lot' : 'Add Lot';
+  const saveLabel = isEdit ? 'Update Lot' : 'Save Lot';
+  const canEdit = !isEdit || editingLot?.status?.toLowerCase() === 'pending';
 
   return (
     <>
-      {/* iOS: paint the notch/top area to match header color */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: theme.primary }}>
         <FocusAwareStatusBar barStyle="light-content" backgroundColor={theme.primary} />
       </SafeAreaView>
 
-      {/* Main safe area (sides/bottom) */}
       <SafeAreaView style={s.page} edges={['left', 'right', 'bottom']}>
         {/* Hero Header */}
         <View style={s.hero}>
@@ -231,8 +247,8 @@ export default function AddLotScreen() {
               onPress={() => navigation.goBack()}
               accessibilityLabel="Go back"
             />
-            <Text style={s.heroTitle}>Add Lot</Text>
-            <View style={{ width: 22 }} />{/* spacer for symmetry */}
+            <Text style={s.heroTitle}>{headerTitle}</Text>
+            <View style={{ width: 22 }} />
           </View>
 
           <View style={s.chipRow}>
@@ -248,20 +264,16 @@ export default function AddLotScreen() {
         </View>
 
         {/* Content */}
-        <ScrollView
-          style={s.container}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
           <FormProvider {...methods}>
-            <SectionCard title="Details" subtitle="Select trip & fill lot details">
-              {/* Trip selector */}
+            <SectionCard title="Details" subtitle={isEdit ? 'Update lot details' : 'Select trip & fill lot details'}>
               <DropdownField
                 name="tripId"
                 label="Trip"
                 options={tripOptions}
                 placeholder={loadingTrips ? 'Loading…' : 'Select Trip'}
                 rules={{ required: 'Trip is required' }}
+                disabled={!canEdit}
               />
 
               <TextField
@@ -269,6 +281,7 @@ export default function AddLotScreen() {
                 label="Species"
                 placeholder="e.g., Pomfret"
                 rules={{ required: 'Species is required' }}
+                editable={canEdit}
               />
 
               <NumberField
@@ -276,6 +289,7 @@ export default function AddLotScreen() {
                 label="Weight (kg)"
                 placeholder="0.0"
                 rules={{ required: 'Weight is required' }}
+                editable={canEdit}
               />
               {!weightValid && weightValue?.length > 0 && (
                 <Text style={s.errorText}>Enter a number greater than 0</Text>
@@ -286,6 +300,7 @@ export default function AddLotScreen() {
                 label="Grade"
                 placeholder="A / B / C"
                 rules={{ required: 'Grade is required' }}
+                editable={canEdit}
               />
             </SectionCard>
 
@@ -299,14 +314,22 @@ export default function AddLotScreen() {
 
             <ReadonlyRow
               label="Review"
-              value={`Lot ${lotNo} will be linked to Trip ${
-                selectedTripLabel ?? selectedTripValue ?? routeTripId ?? '—'
-              }`}
+              value={
+                isEdit
+                  ? `Updating ${lotNo} linked to Trip ${selectedTripLabel ?? selectedTripValue ?? '—'}`
+                  : `Lot ${lotNo} will be linked to Trip ${selectedTripLabel ?? selectedTripValue ?? routeTripId ?? '—'}`
+              }
             />
 
             <SaveBar
-              label="Save Lot"
-              disabled={!gps || !weightValid || !(selectedTripValue ?? routeTripId)}
+              label={saveLabel}
+              disabled={
+                !canEdit ||
+                !gps ||
+                !weightValid ||
+                !(selectedTripValue ?? routeTripId) ||
+                saving
+              }
               onPress={onSave}
             />
           </FormProvider>
