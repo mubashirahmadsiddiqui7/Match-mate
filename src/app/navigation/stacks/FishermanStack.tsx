@@ -8,13 +8,15 @@ import AddLotScreen from '../../../screens/Fisherman/AddLot';
 import OfflineTripsScreen from '../../../screens/Fisherman/OfflineQueue/OfflineTripsScreen';
 import TripsScreen from '../../../screens/Fisherman/Trips/TripsScreen';
 import AllLotsScreen from '../../../screens/Fisherman/LotsList';
+import TripDetailsScreen from '../../../screens/Fisherman/TripDetails/TripDetailsScreen';
 
 export type FishermanStackParamList = {
   FishermanHome: undefined;
   Trip: undefined;
   OfflineTrips: undefined;
-  AllTrip:undefined;
-  LotsList:undefined;
+  AllTrip: undefined;
+  TripDetails: { id: number | string };
+  LotsList: undefined;
   Lots: { tripId?: string } | undefined; // 👈 optional + allow undefined
 };
 
@@ -32,6 +34,11 @@ export default function FishermanStack() {
       <Stack.Screen name="AllTrip" component={TripsScreen} />
 
       <Stack.Screen name="Trip" component={AddTripScreen} />
+      <Stack.Screen
+        name="TripDetails"
+        component={TripDetailsScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen name="Lots" component={AddLotScreen} />
       <Stack.Screen name="LotsList" component={AllLotsScreen} />
 

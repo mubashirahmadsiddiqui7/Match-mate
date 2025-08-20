@@ -1,7 +1,7 @@
 // src/screens/Fisherman/AddTrip/constants.ts
 export const PORTS = [
-  'Karachi Fish Harbour', 'Bin Qasim Port', 'Gwadar', 'Pasni', 'Ormara',
-  'Jiwani', 'Keti Bandar', 'Korangi Creek', 'Fisherman`s Wharf',
+  'Karachi Port', 'Port Qasim', 'Gwadar Port', 'Pasni Port', 'Ormara Port',
+  'Jiwani Port',
 ];
 
 export const SEA_TYPES = ['Nearshore', 'Offshore', 'Deep Sea'];

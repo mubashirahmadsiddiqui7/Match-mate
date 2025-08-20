@@ -18,16 +18,23 @@ export default function ContactSpeciesCostSection() {
         rules={{ required: 'Target species is required' }} // <-- required
       />
 
-       <TextField
+      <TextField
         name="crewCount"
-        label="Total crew members (at least 1)"
-        placeholder="e.g., 1"
+        label="Total crew members (1–50)"
+        placeholder="e.g., 5"
         keyboardType="numeric"
         rules={{
           required: 'Crew count is required',
-          validate: (v: any) => Number(v) >= 1 || 'Crew count must be at least 1',
+          validate: (v: any) => {
+            const num = Number(v);
+            if (isNaN(num)) return 'Crew count must be a number';
+            if (num < 1) return 'Crew count must be at least 1';
+            if (num > 50) return 'Crew count cannot exceed 50';
+            return true;
+          },
         }}
       />
+
       <TextField
         name="fuelCost"
         label="Fuel Cost (Rs)"

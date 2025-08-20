@@ -169,11 +169,9 @@ export default function AddTripScreen() {
         'Trip created',
         `Trip ${tripId} was saved to the server successfully.`,
         [
-          {
-            text: 'Add Lots',
-            onPress: () => navigation.navigate('Lots', { tripId }),
-          },
-          { text: 'OK' },
+          { text: 'OK',
+            onPress: () => navigation.navigate('FishermanHome'),
+           },
         ],
       );
     } catch (err: any) {

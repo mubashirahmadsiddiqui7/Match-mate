@@ -34,6 +34,132 @@ export type Trip = {
   other_costs?: number | null;
   notes?: string | null;
 };
+export type TripDetails = {
+  id: number | string;
+  trip_name: string;
+  status: 'pending'|'approved'|'active'|'completed'|'cancelled';
+  fisherman?: { id: number; name: string } | null;
+  boat_registration_no?: string | null;
+  trip_type?: string | null;
+  boat_name?: string | null;
+
+  fishing_zone?: string | null;
+  departure_port?: string | null;
+  port_location?: string | null;
+  departure_time?: string | null; // display string or ISO
+  departure_lat?: number | string | null;
+  departure_lng?: number | string | null;
+
+  crew_count?: number | null;
+  emergency_phone?: string | null;
+  emergency_contact?: string | null;
+  safety_equipment?: string | null;
+  weather?: string | null;
+  sea_conditions?: string | null;
+  wind_speed?: string | null;
+  wave_height?: string | null;
+
+  target_species?: string | null;
+  estimated_catch?: number | null;
+  fuel_cost?: number | null;
+  operational_cost?: number | null;
+  total_cost?: number | null;
+
+  notes?: string | null;
+
+  lots?: Array<{ id: number|string; lot_no: string; status: string }>;
+};
+// src/services/trips.ts
+
+/** Exactly what your API returns for GET /trips/:id (trimmed to fields we use) */
+export type ServerTripDTO = {
+  id: number | string;
+  trip_id: string;
+  fisherman_id: number;
+  user_id: number;
+  boat_registration_number: string | null;
+  boat_name: string | null;
+  trip_type: string | null;
+  trip_purpose: string | null;
+  fishing_zone: string | null;
+  port_location: string | null;
+  departure_port: string | null;
+  departure_time: string | null;            // ISO e.g. "2025-08-20T11:15:00.000000Z"
+  departure_latitude: string | null;        // note: strings in API
+  departure_longitude: string | null;
+  arrival_time: string | null;
+  arrival_latitude: string | null;
+  arrival_longitude: string | null;
+  arrival_port: string | null;
+  status: 'pending'|'approved'|'active'|'completed'|'cancelled';
+  crew_count: number | null;
+  safety_equipment: string | null;
+  emergency_contact: string | null;
+  emergency_phone: string | null;
+  weather_conditions: string | null;
+  sea_conditions: string | null;
+  wind_speed: string | null | number;
+  wave_height: string | null | number;
+  estimated_catch_weight: number | null;
+  target_species: string | null;
+  fuel_cost: number | string | null;
+  operational_cost: number | string | null;
+  total_cost: number | string | null;
+  notes?: string | null;
+  status_label?: string | null;             // "Pending Approval"
+  trip_type_label?: string | null;          // "Inspection Trip"
+  user?: { id: number; name: string } | null;
+  // lots?: [...] // (not in your sample, keep optional)
+};
+
+
+
+/** Convert server shape → UI-friendly TripDetails used by your screen */
+export function adaptTrip(dto: ServerTripDTO): TripDetails {
+  return {
+    id: dto.id,
+    // Prefer human title if server has one; otherwise use trip_id as the name shown
+    trip_name: dto.trip_id ?? `Trip ${dto.id}`,
+    status: dto.status,
+
+    // show fisherman name (from nested user) when available
+    fisherman: dto.user ? { id: dto.user.id, name: dto.user.name } : null,
+
+    // field names normalized for UI
+    boat_registration_no: dto.boat_registration_number ?? null,
+    boat_name: dto.boat_name ?? null,
+    trip_type: dto.trip_type_label ?? dto.trip_type ?? null,
+
+    fishing_zone: dto.fishing_zone ?? null,
+    port_location: dto.port_location ?? null,
+    departure_port: dto.departure_port ?? null,
+    departure_time: toDisplay12h(dto.departure_time), // pretty string for card/header
+    departure_lat: dto.departure_latitude,
+    departure_lng: dto.departure_longitude,
+
+    crew_count: dto.crew_count ?? null,
+    emergency_phone: dto.emergency_phone ?? null,
+    emergency_contact: dto.emergency_contact ?? null,
+    safety_equipment: dto.safety_equipment ?? null,
+    weather: dto.weather_conditions ?? null,
+    sea_conditions: dto.sea_conditions ?? null,
+    wind_speed: (dto.wind_speed as any) ?? null,
+    wave_height: (dto.wave_height as any) ?? null,
+
+    target_species: dto.target_species ?? null,
+    estimated_catch: dto.estimated_catch_weight ?? null,
+    fuel_cost: dto.fuel_cost != null ? Number(dto.fuel_cost) : null,
+    operational_cost: dto.operational_cost != null ? Number(dto.operational_cost) : null,
+    total_cost: dto.total_cost != null ? Number(dto.total_cost) : null,
+
+    notes: dto.notes ?? null,
+
+    // optional: if/when backend returns lots
+    lots: undefined,
+  };
+}
+
+
 
 export type TripCounts = {
   all: number;
@@ -163,10 +289,17 @@ export async function updateTrip(id: ID, body: UpdateTripBody) {
   return unwrap<Trip>(json);
 }
 
-export async function deleteTrip(id: ID) {
-  const json = await api(`/trips/${id}`, { method: 'DELETE' });
-  return unwrap<{ success: boolean }>(json);
+
+export async function getTripById(id: number | string): Promise<TripDetails> {
+  const json = await api(`/trips/${id}`, { method: 'GET' });
+  const dto: ServerTripDTO = json?.data ?? json;
+  return adaptTrip(dto);
 }
+
+export async function deleteTrip(id: number | string): Promise<void> {
+  await api(`/trips/${id}`, { method: 'DELETE' });
+}
+
 
 /* =========================
  * State transitions
