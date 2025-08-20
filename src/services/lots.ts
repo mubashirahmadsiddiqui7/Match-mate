@@ -32,7 +32,6 @@ export type TripSummary = {
   departure_port?: string | null;
   crew_count?: number | null;
   target_species?: string | null;
-  // ... add other fields you read
 };
 
 export type UserSummary = {
