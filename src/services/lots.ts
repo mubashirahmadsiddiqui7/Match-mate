@@ -18,6 +18,10 @@ export async function createLot(body: CreateLotBody) {
   const json = await api('/fish-lots', { method: 'POST', body });
   return json?.data ?? json;
 }
+export async function deleteLot(id: number | string): Promise<void> {
+  // Your api() helper can return 204/empty; we don't need the response body.
+  await api(`/fish-lots/${id}`, { method: 'DELETE' });
+}
 
 
 /** Nested types (trim to what you actually use in the app) */
@@ -151,4 +155,49 @@ export async function fetchAllFishLots(params: Omit<ListLotsParams, 'page' | 'pe
     meta = next.meta;
   }
   return all;
+}
+
+// ---- add near the top with other imports ----
+// none
+
+// ---- add these helpers (reuse your own if you already have) ----
+function toFixed2(n: number | string | null | undefined) {
+  if (n == null) return null;
+  const v = typeof n === 'string' ? parseFloat(n) : Number(n);
+  if (!Number.isFinite(v)) return null;
+  return v.toFixed(2);
+}
+
+export type FishLotById = FishLot & {
+  trip?: TripSummary & { trip_id: string };
+  user?: UserSummary;
+};
+
+// GET /fish-lots/:id
+export async function fetchFishLotById(id: number | string): Promise<FishLotById> {
+  const json = await api(`/fish-lots/${id}`, { method: 'GET' });
+  const dto = json?.data ?? json;
+
+  // normalize a few numeric/string fields for easier rendering
+  const lot: FishLotById = {
+    ...dto,
+    weight_kg: dto?.weight_kg ?? null,
+    gps_latitude: dto?.gps_latitude ?? null,
+    gps_longitude: dto?.gps_longitude ?? null,
+    captured_at: dto?.captured_at ?? null,
+    status: (dto?.status || 'pending') as any,
+    trip: dto?.trip ?? undefined,
+    user: dto?.user ?? undefined,
+  };
+
+  return lot;
+}
+
+// PUT/PATCH /fish-lots/:id (server usually accepts either; prefer PATCH)
+export async function updateLot(
+  id: number | string,
+  body: Partial<CreateLotBody>
+) {
+  const json = await api(`/fish-lots/${id}`, { method: 'PUT', body });
+  return json?.data ?? json;
 }

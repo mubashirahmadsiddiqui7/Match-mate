@@ -37,7 +37,7 @@ export type Trip = {
 export type TripDetails = {
   id: number | string;
   trip_name: string;
-  status: 'pending'|'approved'|'active'|'completed'|'cancelled';
+  status: 'pending' | 'approved' | 'active' | 'completed' | 'cancelled';
   fisherman?: { id: number; name: string } | null;
   boat_registration_no?: string | null;
   trip_type?: string | null;
@@ -58,7 +58,7 @@ export type TripDetails = {
   sea_conditions?: string | null;
   wind_speed?: string | null;
   wave_height?: string | null;
-
+  trip_purpose?: string | null;
   target_species?: string | null;
   estimated_catch?: number | null;
   fuel_cost?: number | null;
@@ -67,7 +67,7 @@ export type TripDetails = {
 
   notes?: string | null;
 
-  lots?: Array<{ id: number|string; lot_no: string; status: string }>;
+  lots?: Array<{ id: number | string; lot_no: string; status: string }>;
 };
 // src/services/trips.ts
 
@@ -80,18 +80,17 @@ export type ServerTripDTO = {
   boat_registration_number: string | null;
   boat_name: string | null;
   trip_type: string | null;
-  trip_purpose: string | null;
   fishing_zone: string | null;
   port_location: string | null;
   departure_port: string | null;
-  departure_time: string | null;            // ISO e.g. "2025-08-20T11:15:00.000000Z"
-  departure_latitude: string | null;        // note: strings in API
+  departure_time: string | null; // ISO e.g. "2025-08-20T11:15:00.000000Z"
+  departure_latitude: string | null; // note: strings in API
   departure_longitude: string | null;
   arrival_time: string | null;
   arrival_latitude: string | null;
   arrival_longitude: string | null;
   arrival_port: string | null;
-  status: 'pending'|'approved'|'active'|'completed'|'cancelled';
+  status: 'pending' | 'approved' | 'active' | 'completed' | 'cancelled';
   crew_count: number | null;
   safety_equipment: string | null;
   emergency_contact: string | null;
@@ -106,13 +105,18 @@ export type ServerTripDTO = {
   operational_cost: number | string | null;
   total_cost: number | string | null;
   notes?: string | null;
-  status_label?: string | null;             // "Pending Approval"
-  trip_type_label?: string | null;          // "Inspection Trip"
+  status_label?: string | null; // "Pending Approval"
+  trip_type_label?: string | null; // "Inspection Trip"
+  trip_purpose: string | null; // ⬅️ already present in your JSON
+  fish_lots?: Array<{
+    // ⬅️ add this
+    id: number | string;
+    lot_no: string;
+    status: string;
+  }>;
   user?: { id: number; name: string } | null;
   // lots?: [...] // (not in your sample, keep optional)
 };
-
-
 
 /** Convert server shape → UI-friendly TripDetails used by your screen */
 export function adaptTrip(dto: ServerTripDTO): TripDetails {
@@ -149,17 +153,16 @@ export function adaptTrip(dto: ServerTripDTO): TripDetails {
     target_species: dto.target_species ?? null,
     estimated_catch: dto.estimated_catch_weight ?? null,
     fuel_cost: dto.fuel_cost != null ? Number(dto.fuel_cost) : null,
-    operational_cost: dto.operational_cost != null ? Number(dto.operational_cost) : null,
+    operational_cost:
+      dto.operational_cost != null ? Number(dto.operational_cost) : null,
     total_cost: dto.total_cost != null ? Number(dto.total_cost) : null,
 
-    notes: dto.notes ?? null,
+    notes: dto.trip_purpose ?? null,
 
     // optional: if/when backend returns lots
     lots: undefined,
   };
 }
-
-
 
 export type TripCounts = {
   all: number;
@@ -182,8 +185,8 @@ export type Paginated<T> = {
 
 /** Create payload (fields as per API doc) */
 export type CreateTripBody = {
-  fisherman_id?: number;       // ← add
-  trip_id?: string;            // ← add (server column exists)
+  fisherman_id?: number; // ← add
+  trip_id?: string; // ← add (server column exists)
   trip_name: string;
   boat_id: number;
   departure_port: string;
@@ -210,7 +213,6 @@ function readTotal(p: any): number {
   if (Array.isArray(p?.data)) return p.data.length;
   return 0;
 }
-
 
 /** Update: everything optional */
 export type UpdateTripBody = Partial<CreateTripBody>;
@@ -289,7 +291,6 @@ export async function updateTrip(id: ID, body: UpdateTripBody) {
   return unwrap<Trip>(json);
 }
 
-
 export async function getTripById(id: number | string): Promise<TripDetails> {
   const json = await api(`/trips/${id}`, { method: 'GET' });
   const dto: ServerTripDTO = json?.data ?? json;
@@ -299,7 +300,6 @@ export async function getTripById(id: number | string): Promise<TripDetails> {
 export async function deleteTrip(id: number | string): Promise<void> {
   await api(`/trips/${id}`, { method: 'DELETE' });
 }
-
 
 /* =========================
  * State transitions
@@ -390,12 +390,20 @@ export async function getTripCounts(): Promise<{
   totals: TripCounts;
   errors: Partial<Record<'all' | TripStatus, string>>;
 }> {
-  const statuses: TripStatus[] = ['pending', 'approved', 'active', 'completed', 'cancelled'];
+  const statuses: TripStatus[] = [
+    'pending',
+    'approved',
+    'active',
+    'completed',
+    'cancelled',
+  ];
 
   // Build requests: "all" plus each status (page=1, per_page=1 to read paginator.total)
   const reqs = [
     api('/trips', { query: { page: 1, per_page: 1 } }), // all
-    ...statuses.map((status) => api('/trips', { query: { status, page: 1, per_page: 1 } })),
+    ...statuses.map(status =>
+      api('/trips', { query: { status, page: 1, per_page: 1 } }),
+    ),
   ];
 
   const settled = await Promise.allSettled(reqs);
@@ -436,15 +444,17 @@ export async function getTripCounts(): Promise<{
 
 export type TripRowDTO = {
   id: number | string;
-  trip_name: string;                        // we’ll map from trip_id or trip_name
+  trip_name: string; // we’ll map from trip_id or trip_name
   status: 'pending' | 'approved' | 'active' | 'completed' | 'cancelled';
   departure_port?: string | null;
   destination_port?: string | null;
-  departure_time?: string | null;           // "YYYY-MM-DD hh:mm AM/PM"
+  departure_time?: string | null; // "YYYY-MM-DD hh:mm AM/PM"
 };
 
 // simple date → "YYYY-MM-DD hh:mm AM/PM"
-function pad(n: number) { return String(n).padStart(2, '0'); }
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
 function toDisplay12h(iso?: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -465,7 +475,10 @@ function toDisplay12h(iso?: string | null): string | null {
  * Fetch a page of trips and map to TripRowDTO[] your UI uses.
  * Server returns: { success, data: { data: Trip[], total, ... } }
  */
-export async function listTripsPage(params?: { page?: number; per_page?: number }) {
+export async function listTripsPage(params?: {
+  page?: number;
+  per_page?: number;
+}) {
   const page = params?.page ?? 1;
   const per_page = params?.per_page ?? 25;
 
@@ -475,8 +488,8 @@ export async function listTripsPage(params?: { page?: number; per_page?: number 
   const arr: any[] = Array.isArray(json?.data?.data)
     ? json.data.data
     : Array.isArray(json?.data)
-      ? json.data
-      : [];
+    ? json.data
+    : [];
 
   const rows: TripRowDTO[] = arr.map((t: any) => ({
     id: t.id ?? t.trip_id,

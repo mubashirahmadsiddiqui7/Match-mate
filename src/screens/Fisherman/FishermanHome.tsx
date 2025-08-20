@@ -20,17 +20,10 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
 import type { RootState } from '../../redux/store';
+import PALETTE from '../../theme/palette';
 
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishermanHome'>;
 
-const PALETTE = {
-  green700: '#1B5E20',
-  green50: '#E8F5E9',
-  text900: '#111827',
-  text500: '#6B7280',
-  border: '#E5E7EB',
-  surface: '#FFFFFF',
-};
 
 type ActionCardProps = {
   label: string;
