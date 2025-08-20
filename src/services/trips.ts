@@ -291,6 +291,33 @@ export async function updateTrip(id: ID, body: UpdateTripBody) {
   return unwrap<Trip>(json);
 }
 
+// src/services/trips.ts  (already present — keep as is or adjust base path)
+export async function startTrip(id: ID) {
+  const json = await api(`/trips/${id}/start`, { method: 'POST' });
+  return (json?.data ?? json) as Trip;
+}
+
+export async function cancelTrip(id: ID, body: { cancellation_reason: string }) {
+  const json = await api(`/trips/${id}/cancel`, { method: 'POST', body });
+  return (json?.data ?? json) as Trip;
+}
+
+/** Match your Complete modal fields (arrival info etc.) */
+export type CompleteTripPayload = {
+  arrival_port: string;
+  arrival_notes?: string;
+  estimated_catch_weight?: number;
+  catch_notes?: string;
+  revenue?: number;
+  arrival_latitude?: number;
+  arrival_longitude?: number;
+};
+export async function completeTrip(id: ID, body: CompleteTripPayload) {
+  const json = await api(`/trips/${id}/complete`, { method: 'POST', body });
+  return (json?.data ?? json) as Trip;
+}
+
+
 export async function getTripById(id: number | string): Promise<TripDetails> {
   const json = await api(`/trips/${id}`, { method: 'GET' });
   const dto: ServerTripDTO = json?.data ?? json;
@@ -310,20 +337,7 @@ export async function approveTrip(id: ID) {
   return unwrap<Trip>(json);
 }
 
-export async function startTrip(id: ID) {
-  const json = await api(`/trips/${id}/start`, { method: 'POST' });
-  return unwrap<Trip>(json);
-}
 
-export async function completeTrip(id: ID, body: CompleteTripBody) {
-  const json = await api(`/trips/${id}/complete`, { method: 'POST', body });
-  return unwrap<Trip>(json);
-}
-
-export async function cancelTrip(id: ID, body: CancelTripBody) {
-  const json = await api(`/trips/${id}/cancel`, { method: 'POST', body });
-  return unwrap<Trip>(json);
-}
 
 /* =========================
  * Location & Media

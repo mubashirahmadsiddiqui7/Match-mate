@@ -200,7 +200,7 @@ export default function LotDetailsScreen() {
         <Pressable
           onPress={() =>
             // @ts-ignore
-           navigation.navigate('Lots', { mode: 'edit', lotId: lot.id })
+            navigation.navigate('Lots', { mode: 'edit', lotId: lot.id })
           }
           style={[
             styles.headerBtn,
