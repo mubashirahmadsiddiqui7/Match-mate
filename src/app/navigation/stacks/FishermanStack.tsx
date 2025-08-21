@@ -10,6 +10,7 @@ import TripsScreen from '../../../screens/Fisherman/Trips/TripsScreen';
 import AllLotsScreen from '../../../screens/Fisherman/LotsList';
 import TripDetailsScreen from '../../../screens/Fisherman/TripDetails/TripDetailsScreen';
 import LotDetailsScreen from '../../../screens/Fisherman/LotsDetails/LotDetailsScreen';
+import OfflineQueueScreen from '../../../screens/Fisherman/OfflineQueue/OfflineQueueScreen';
 
 export type FishermanStackParamList = {
   FishermanHome: undefined;
@@ -19,7 +20,7 @@ export type FishermanStackParamList = {
   TripDetails: { id: number | string };
   LotsList: undefined;
   // Lots: { tripId?: string } | undefined; // 👈 optional + allow undefined
-    LotDetails: { id: number | string };   
+  LotDetails: { id: number | string };
   // ⬇️ expand Lots route to support edit mode
   Lots:
     | { tripId?: string | number } // create mode (existing)
@@ -48,13 +49,17 @@ export default function FishermanStack() {
       <Stack.Screen name="Lots" component={AddLotScreen} />
       <Stack.Screen name="LotsList" component={AllLotsScreen} />
 
-      <Stack.Screen
+      {/* <Stack.Screen
         name="OfflineTrips"
         component={OfflineTripsScreen}
         options={{ title: 'Offline Trips' }}
+      /> */}
+      <Stack.Screen
+        name="OfflineTrips"
+        component={OfflineQueueScreen}
+        options={{ title: 'Offline Forms' }}
       />
       <Stack.Screen name="LotDetails" component={LotDetailsScreen} />
-
     </Stack.Navigator>
   );
 }

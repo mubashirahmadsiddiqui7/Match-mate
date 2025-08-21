@@ -5,7 +5,7 @@ import { store } from './src/redux/store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import RootNavigator from './src/app/navigation/RootNavigator';
 import AuthBootstrap from './src/provider/AuthBootstrap';
-import TripSyncProvider from './src/provider/TripSyncProvider';
+import QueueProvider from './src/offline/QueueProvider';
 
      // ⬅️ Optional
 
@@ -14,9 +14,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
         <AuthBootstrap>
-          <TripSyncProvider>
+          <QueueProvider>
             <RootNavigator />
-          </TripSyncProvider>
+          </QueueProvider>
         </AuthBootstrap>
       </Provider>
     </GestureHandlerRootView>

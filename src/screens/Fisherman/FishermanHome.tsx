@@ -53,6 +53,7 @@ const FishermanHome = () => {
   const { width, height: screenHeight } = useWindowDimensions();
 
   const user = useSelector((s: RootState) => (s as any).auth?.user);
+  console.log("existing user", user)
   const name = user?.name ?? 'Fisherman';
   const role = (user?.role ?? user?.user_type ?? 'fisherman')
     .toString()

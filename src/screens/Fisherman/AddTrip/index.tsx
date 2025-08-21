@@ -17,7 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { s } from './styles';
 import { buildTripId } from '../../../utils/ids';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
-import BasicInfoSection, { parseYmd12h, formatYmd12h } from './components/sections/BasicInfoSection';
+import BasicInfoSection, {
+  parseYmd12h,
+  formatYmd12h,
+} from './components/sections/BasicInfoSection';
 import DropdownsSection from './components/sections/DropdownsSection';
 import ContactSpeciesCostSection from './components/sections/ContactSpeciesCostSection';
 import LocationCard from './components/LocationCard';
@@ -27,12 +30,18 @@ import type { FormValues } from './types';
 import type { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
 import SectionCard from './components/SectionCard';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { createTrip, getTripById, updateTrip, type TripDetails } from '../../../services/trips';
+import {
+  createTrip,
+  getTripById,
+  updateTrip,
+  type TripDetails,
+} from '../../../services/trips';
 import type { RouteProp } from '@react-navigation/native';
+import { isOnline } from '../../../offline/net';
+import { enqueueTrip, processQueue } from '../../../offline/TripQueues';
 
 const HEADER_BG = '#1f720d';
 type TripRoute = RouteProp<FishermanStackParamList, 'Trip'>;
-
 
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'Trip'>;
 
@@ -50,19 +59,19 @@ const TRIP_TYPE_MAP: Record<string, string> = {
   'Research Trip': 'research',
 };
 const TRIP_TYPE_REVERSE: Record<string, string> = Object.fromEntries(
-  Object.entries(TRIP_TYPE_MAP).map(([label, val]) => [val, label])
+  Object.entries(TRIP_TYPE_MAP).map(([label, val]) => [val, label]),
 );
 
 export default function AddTripScreen() {
   const navigation = useNavigation<Nav>();
-   const { params } = useRoute<TripRoute>();
+  const { params } = useRoute<TripRoute>();
 
   const isEdit = !!params?.id || params?.mode === 'edit';
   const editingId = params?.id;
 
   const methods = useForm<FormValues>({
     defaultValues: {
-      fisherman: '',            // fisher id (stringifiable)
+      fisherman: '', // fisher id (stringifiable)
       departure_time: formatYmd12h(new Date()),
       boatNameId: '',
       crewCount: '',
@@ -110,7 +119,8 @@ export default function AddTripScreen() {
         departure_time: t.departure_time || formatYmd12h(new Date()),
         boatNameId: t.boat_registration_no ?? '',
         crewCount: t.crew_count != null ? String(t.crew_count) : '',
-        tripType: TRIP_TYPE_REVERSE[t.trip_type ?? ''] || t.trip_type || 'Fishing Trip',
+        tripType:
+          TRIP_TYPE_REVERSE[t.trip_type ?? ''] || t.trip_type || 'Fishing Trip',
         tripPurpose: '', // server has trip_purpose? Add if you store it.
         departure_port: t.departure_port ?? '',
         destination_port: '', // fill if you store a distinct destination in server
@@ -120,8 +130,10 @@ export default function AddTripScreen() {
         targetSpecies: t.target_species ?? '',
         tripCost: '', // if you track trip_cost separately
         fuelCost: t.fuel_cost != null ? String(t.fuel_cost) : '',
-        estimatedCatch: t.estimated_catch != null ? String(t.estimated_catch) : '',
-        equipmentCost: t.operational_cost != null ? String(t.operational_cost) : '',
+        estimatedCatch:
+          t.estimated_catch != null ? String(t.estimated_catch) : '',
+        equipmentCost:
+          t.operational_cost != null ? String(t.operational_cost) : '',
       };
 
       // set defaults + keep a pristine copy for dirty diff
@@ -141,13 +153,17 @@ export default function AddTripScreen() {
   }, [editingId]);
 
   // ---- submit handlers ----
-  const onSaveCreate = methods.handleSubmit(async (values) => {
+  const onSaveCreate = methods.handleSubmit(async values => {
     if (!gps) {
-      Alert.alert('Location required', 'Please capture location before saving.');
+      Alert.alert(
+        'Location required',
+        'Please capture location before saving.',
+      );
       return;
     }
     try {
-      const departureDisplay = values.departure_time?.trim() || formatYmd12h(new Date());
+      const departureDisplay =
+        values.departure_time?.trim() || formatYmd12h(new Date());
       const dt = parseYmd12h(departureDisplay);
       const departure_date = formatYmd(dt);
 
@@ -170,34 +186,70 @@ export default function AddTripScreen() {
         trip_type,
         port_location,
         crew_count: Number(values.crewCount || 0), // your backend accepted crew_count for create
+
         departure_port: values.departure_port || undefined,
         destination_port: values.destination_port || undefined,
         departure_date,
         departure_time: departureDisplay,
         departure_latitude: gps?.lat,
         departure_longitude: gps?.lng,
+
         fishing_method: tripTypeRaw,
         target_species: values.targetSpecies?.trim() || undefined,
         boat_registration_number: values.boatNameId?.trim() || undefined,
+
         sea_type: values.seaType || undefined,
         sea_conditions: values.seaConditions || undefined,
         emergency_contact: values.emergencyContact?.trim() || undefined,
+
         trip_cost: values.tripCost !== '' ? Number(values.tripCost) : undefined,
         fuel_cost: values.fuelCost !== '' ? Number(values.fuelCost) : undefined,
         estimated_catch:
-          values.estimatedCatch !== '' ? Number(values.estimatedCatch) : undefined,
+          values.estimatedCatch !== ''
+            ? Number(values.estimatedCatch)
+            : undefined,
         equipment_cost:
-          values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined,
+          values.equipmentCost !== ''
+            ? Number(values.equipmentCost)
+            : undefined,
+        notes: values.tripPurpose?.trim() || undefined,
       } as const;
 
-      const created = await createTrip(body as any);
-      console.log('created trip:', created);
+      const online = await isOnline();
 
-      Alert.alert('Trip created', `Trip ${tripId} was saved successfully.`, [
-        { text: 'OK', onPress: () => navigation.navigate('FishermanHome') },
-      ]);
+      if (!online) {
+        await enqueueTrip(body as any);
+        Alert.alert(
+          'Saved Offline',
+          'No internet. Trip added to upload queue and will auto-submit when online.',
+        );
+        // Optionally go back to home
+        navigation.navigate('FishermanHome');
+        return;
+      }
+
+      try {
+        // Try live submit first
+        await createTrip(body as any);
+        Alert.alert('Trip created', `Trip ${tripId} was saved successfully.`, [
+          { text: 'OK', onPress: () => navigation.navigate('FishermanHome') },
+        ]);
+      } catch (err: any) {
+        // Network/server temporary issues → fallback to queue
+        await enqueueTrip(body as any);
+        Alert.alert(
+          'Saved Offline',
+          'Temporary issue submitting. Trip moved to upload queue and will auto-submit when online.',
+        );
+        navigation.navigate('FishermanHome');
+        // Kick the processor (in case we’re still online and it was a transient error)
+        processQueue();
+      }
     } catch (err: any) {
-      Alert.alert('Save failed', err?.message || 'Failed to save trip to server.');
+      Alert.alert(
+        'Save failed',
+        err?.message || 'Failed to prepare trip payload.',
+      );
     }
   });
 
@@ -206,7 +258,8 @@ export default function AddTripScreen() {
     // If you need exact dirty fields: methods.formState.dirtyFields (nested flags)
     // For simplicity, compare against initialValues snapshot when editing.
     const from = initialValues || values;
-    const changed = <T extends keyof FormValues>(key: T) => values[key] !== from[key];
+    const changed = <T extends keyof FormValues>(key: T) =>
+      values[key] !== from[key];
 
     // Map labels -> enums again
     const tripTypeRaw = values.tripType?.trim() || 'Fishing Trip';
@@ -218,18 +271,25 @@ export default function AddTripScreen() {
 
     // Patch uses server field names commonly accepted by your API on update
     const patch: Record<string, any> = {};
-    if (changed('fisherman')) patch.fisherman_id = values.fisherman ? Number(values.fisherman) : undefined;
+    if (changed('fisherman'))
+      patch.fisherman_id = values.fisherman
+        ? Number(values.fisherman)
+        : undefined;
     if (changed('tripType')) patch.trip_type = trip_type;
-    if (changed('tripPurpose')) patch.trip_purpose = values.tripPurpose?.trim() || undefined;
+    if (changed('tripPurpose'))
+      patch.trip_purpose = values.tripPurpose?.trim() || undefined;
 
-    if (changed('departure_port')) patch.departure_port = values.departure_port || undefined;
-    if (changed('destination_port')) patch.destination_port = values.destination_port || undefined;
+    if (changed('departure_port'))
+      patch.departure_port = values.departure_port || undefined;
+    if (changed('destination_port'))
+      patch.destination_port = values.destination_port || undefined;
     if (changed('departure_time') && departureDisplay) {
       patch.departure_time = departureDisplay;
       patch.departure_date = departure_date; // many backends like both
     }
 
-    if (changed('boatNameId')) patch.boat_registration_number = values.boatNameId?.trim() || undefined;
+    if (changed('boatNameId'))
+      patch.boat_registration_number = values.boatNameId?.trim() || undefined;
 
     if (changed('crewCount')) {
       const n = values.crewCount === '' ? undefined : Number(values.crewCount);
@@ -238,19 +298,32 @@ export default function AddTripScreen() {
       patch.crew_count = n;
     }
 
-    if (changed('targetSpecies')) patch.target_species = values.targetSpecies?.trim() || undefined;
+    if (changed('targetSpecies'))
+      patch.target_species = values.targetSpecies?.trim() || undefined;
     if (changed('seaType')) patch.sea_type = values.seaType || undefined;
-    if (changed('seaConditions')) patch.sea_conditions = values.seaConditions || undefined;
-    if (changed('emergencyContact')) patch.emergency_contact = values.emergencyContact?.trim() || undefined;
+    if (changed('seaConditions'))
+      patch.sea_conditions = values.seaConditions || undefined;
+    if (changed('emergencyContact'))
+      patch.emergency_contact = values.emergencyContact?.trim() || undefined;
 
-    if (changed('tripCost')) patch.trip_cost = values.tripCost !== '' ? Number(values.tripCost) : undefined;
-    if (changed('fuelCost')) patch.fuel_cost = values.fuelCost !== '' ? Number(values.fuelCost) : undefined;
-    if (changed('estimatedCatch')) patch.estimated_catch = values.estimatedCatch !== '' ? Number(values.estimatedCatch) : undefined;
+    if (changed('tripCost'))
+      patch.trip_cost =
+        values.tripCost !== '' ? Number(values.tripCost) : undefined;
+    if (changed('fuelCost'))
+      patch.fuel_cost =
+        values.fuelCost !== '' ? Number(values.fuelCost) : undefined;
+    if (changed('estimatedCatch'))
+      patch.estimated_catch =
+        values.estimatedCatch !== ''
+          ? Number(values.estimatedCatch)
+          : undefined;
     if (changed('equipmentCost')) {
       // Your detail screen shows "Operational Cost" from operational_cost
-      patch.operational_cost = values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
+      patch.operational_cost =
+        values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
       // If your server expects equipment_cost instead, keep both:
-      patch.equipment_cost = values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
+      patch.equipment_cost =
+        values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
     }
 
     // port_location convenience (if either port changed)
@@ -264,7 +337,7 @@ export default function AddTripScreen() {
     return patch;
   };
 
-  const onSaveEdit = methods.handleSubmit(async (values) => {
+  const onSaveEdit = methods.handleSubmit(async values => {
     if (!isEdit || !editingId) return;
 
     // crew count guard (1–50) if present
@@ -295,11 +368,20 @@ export default function AddTripScreen() {
 
   // ---- header labels & chips ----
   const headerTitle = isEdit ? 'Edit Trip' : 'Add Trip';
-  const chipTripId = isEdit ? (serverTrip?.trip_name ?? serverTrip?.id ?? '') : tripId;
+  const chipTripId = isEdit
+    ? serverTrip?.trip_name ?? serverTrip?.id ?? ''
+    : tripId;
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: HEADER_BG }}>
-      <StatusBar backgroundColor={HEADER_BG} barStyle="light-content" translucent={false} />
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={{ flex: 1, backgroundColor: HEADER_BG }}
+    >
+      <StatusBar
+        backgroundColor={HEADER_BG}
+        barStyle="light-content"
+        translucent={false}
+      />
 
       <View style={[s.page, { flex: 1 }]}>
         {/* Header */}
@@ -329,10 +411,16 @@ export default function AddTripScreen() {
             </View>
 
             {/* GPS chip: required on create, optional on edit */}
-            <View style={[s.chip, (!isEdit && !gps) ? s.chipWarn : s.chipOk]}>
+            <View style={[s.chip, !isEdit && !gps ? s.chipWarn : s.chipOk]}>
               <Text style={s.chipLabel}>GPS</Text>
               <Text style={s.chipValue}>
-                {isEdit ? (gps ? 'Captured' : 'Optional') : (gps ? 'Captured' : 'Pending')}
+                {isEdit
+                  ? gps
+                    ? 'Captured'
+                    : 'Optional'
+                  : gps
+                  ? 'Captured'
+                  : 'Pending'}
               </Text>
             </View>
           </View>
@@ -340,7 +428,14 @@ export default function AddTripScreen() {
 
         {/* Body */}
         {loading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#fff',
+            }}
+          >
             <Text>Loading trip…</Text>
           </View>
         ) : (
@@ -350,20 +445,40 @@ export default function AddTripScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <FormProvider {...methods}>
-              <SectionCard title="Basic Info" subtitle="Captain & vessel details">
+              <SectionCard
+                title="Basic Info"
+                subtitle="Captain & vessel details"
+              >
                 <BasicInfoSection />
               </SectionCard>
 
-              <SectionCard title="Route & Conditions" subtitle="Port and sea conditions">
+              <SectionCard
+                title="Route & Conditions"
+                subtitle="Port and sea conditions"
+              >
                 <DropdownsSection />
               </SectionCard>
 
-              <SectionCard title="Contacts & Targets" subtitle="Emergency contact and species">
+              <SectionCard
+                title="Contacts & Targets"
+                subtitle="Emergency contact and species"
+              >
                 <ContactSpeciesCostSection />
               </SectionCard>
 
-              <SectionCard title="Starting Location" subtitle={isEdit ? 'Optional for edits' : 'Capture your current coordinates'}>
-                <LocationCard gps={gps} loading={gpsLoading} onRecapture={recapture} />
+              <SectionCard
+                title="Starting Location"
+                subtitle={
+                  isEdit
+                    ? 'Optional for edits'
+                    : 'Capture your current coordinates'
+                }
+              >
+                <LocationCard
+                  gps={gps}
+                  loading={gpsLoading}
+                  onRecapture={recapture}
+                />
               </SectionCard>
 
               {/* Save bar: GPS required only for create */}

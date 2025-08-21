@@ -1,11 +1,25 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Pressable, Text, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, Pressable, Text, Platform, ActivityIndicator } from 'react-native';
 import TextField from '../fields/TextField';
 import DropdownField from '../fields/DropdownField';
 import { useFormContext } from 'react-hook-form';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import NetInfo from '@react-native-community/netinfo';
+
 import { fetchFishermenList, type Fisherman } from '../../../../../services/fisherman';
+import { readFishermenCache, writeFishermenCache } from '../../../../../offline/fishermenCache';
+
+const PALETTE = {
+  green700: '#1B5E20',
+  text900: '#111827',
+  text600: '#4B5563',
+  border: '#E5E7EB',
+  surface: '#FFFFFF',
+  warn: '#EF6C00',
+  error: '#C62828',
+  chip: '#F1F5F9',
+};
 
 const TRIP_TYPE_OPTIONS = [
   'Fishing Trip',
@@ -15,7 +29,7 @@ const TRIP_TYPE_OPTIONS = [
   'Research Trip',
 ];
 
-/* ---------- small helpers ---------- */
+/* ---------- helpers ---------- */
 const pad = (n: number) => String(n).padStart(2, '0');
 export const formatYmd12h = (d: Date) => {
   const yyyy = d.getFullYear();
@@ -23,11 +37,9 @@ export const formatYmd12h = (d: Date) => {
   const dd = pad(d.getDate());
   let h = d.getHours();
   const m = pad(d.getMinutes());
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  if (h === 0) h = 12;
-  const hh = pad(h);
-  return `${yyyy}-${mm}-${dd} ${hh}:${m} ${ampm}`;
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return `${yyyy}-${mm}-${dd} ${pad(h)}:${m} ${ap}`;
 };
 export const parseYmd12h = (s?: string) => {
   if (!s) return new Date();
@@ -42,22 +54,23 @@ export const parseYmd12h = (s?: string) => {
   if (hs && mins && ap) {
     let h12 = parseInt(hs, 10) % 12;
     if (/pm/i.test(ap)) h12 += 12;
-    H = h12;
-    Mi = parseInt(mins, 10);
+    H = h12; Mi = parseInt(mins, 10);
   }
   const dt = new Date(y, mo, d, H, Mi);
   return isNaN(dt.getTime()) ? new Date() : dt;
 };
 
+/* ---------- component ---------- */
 export default function BasicInfoSection() {
-  const [loading, setLoading] = useState(false);
+  const { watch, setValue } = useFormContext();
+  const departureDT: string = watch('departure_time');
+
+  const [loading, setLoading] = useState<boolean>(false);
   const [fishermen, setFishermen] = useState<Fisherman[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState<boolean>(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-
-  const { watch, setValue } = useFormContext();
-  const departureDT: string = watch('departure_time'); // "YYYY-MM-DD hh:mm AM/PM"
 
   // default departure_time → now (formatted)
   useEffect(() => {
@@ -69,17 +82,44 @@ export default function BasicInfoSection() {
     }
   }, [departureDT, setValue]);
 
-  // fetch fishermen (single, auth)
+  // track connectivity
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(s => setOnline(!!s.isConnected));
+    NetInfo.fetch().then(s => setOnline(!!s.isConnected)).catch(() => {});
+    return () => { unsub && unsub(); };
+  }, []);
+
+  // load cache immediately, then try network refresh
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
       setError(null);
+      // 1) show cached immediately
+      const cached = await readFishermenCache();
+      if (!cancelled && Array.isArray(cached) && cached.length > 0) {
+        setFishermen(cached as any);
+      }
+      // 2) try network (if online)
       try {
-        const data = await fetchFishermenList();
-        if (!cancelled) setFishermen(Array.isArray(data) ? data : []);
+        setLoading(true);
+        const net = await NetInfo.fetch();
+        if (net.isConnected) {
+          const data = await fetchFishermenList();
+          const list = Array.isArray(data) ? data : [];
+          if (!cancelled) {
+            setFishermen(list);
+            // update cache
+            const slim = list.map((f: Fisherman) => ({ id: f.id, name: f.name }));
+            writeFishermenCache(slim);
+          }
+        } else if (!cached?.length) {
+          // offline and no cache
+          if (!cancelled) setError('Offline and no saved list found');
+        }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Failed to load fishermen');
+        if (!cancelled) {
+          if (!cached?.length) setError(e?.message || 'Failed to load fishermen');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -87,9 +127,25 @@ export default function BasicInfoSection() {
     return () => { cancelled = true; };
   }, []);
 
-  // build dropdown options: show name, store id
+  const retryFetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchFishermenList();
+      const list = Array.isArray(data) ? data : [];
+      setFishermen(list);
+      const slim = list.map((f: Fisherman) => ({ id: f.id, name: f.name }));
+      writeFishermenCache(slim);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh list');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // build dropdown options
   const fisherOptions = useMemo(
-    () => fishermen.map(f => ({ label: f.name, value: f.id })),
+    () => fishermen.map(f => ({ label: f.name, value: String(f.id) })),
     [fishermen]
   );
 
@@ -99,11 +155,8 @@ export default function BasicInfoSection() {
     const current = parseYmd12h(departureDT);
     const picked = date ?? current;
     const merged = new Date(
-      picked.getFullYear(),
-      picked.getMonth(),
-      picked.getDate(),
-      current.getHours(),
-      current.getMinutes(),
+      picked.getFullYear(), picked.getMonth(), picked.getDate(),
+      current.getHours(), current.getMinutes(),
     );
     setValue('departure_time', formatYmd12h(merged), { shouldValidate: true, shouldDirty: true });
   };
@@ -114,30 +167,79 @@ export default function BasicInfoSection() {
     const current = parseYmd12h(departureDT);
     const picked = date ?? current;
     const merged = new Date(
-      current.getFullYear(),
-      current.getMonth(),
-      current.getDate(),
-      picked.getHours(),
-      picked.getMinutes(),
+      current.getFullYear(), current.getMonth(), current.getDate(),
+      picked.getHours(), picked.getMinutes(),
     );
     setValue('departure_time', formatYmd12h(merged), { shouldValidate: true, shouldDirty: true });
   };
 
+  const hasList = fisherOptions.length > 0;
+
   return (
     <>
-      {/* Fisherman (Dropdown) — shows name, saves numeric id */}
+      {/* Fisherman (Dropdown) — shows name, saves numeric id as string */}
       <DropdownField
-        name="fisherman"                     // value in form will be the fisherman id
+        name="fisherman"
         label="Fisherman"
-        options={fisherOptions}              // {label: name, value: id}
+        options={fisherOptions}
         placeholder={
-          loading ? 'Loading…' : (error ? 'Failed — try again' : 'Select Fisherman')
+          loading
+            ? 'Loading…'
+            : (hasList ? 'Select Fisherman' : (error ? 'No data — retry or enter ID' : 'No data yet'))
         }
-        disabled={loading}
-        rules={{ required: 'fisher name is required' }}
+        disabled={loading || !hasList}
+        rules={{ required: 'Fisherman is required' }}
       />
 
-      {/* Departure Date & Time (YYYY-MM-DD hh:mm AM/PM) */}
+      {/* Retry + Status Row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+        {loading && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ActivityIndicator size="small" color={PALETTE.green700} />
+            <Text style={{ color: PALETTE.text600 }}>Fetching latest list…</Text>
+          </View>
+        )}
+        {!loading && !!error && (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ color: PALETTE.warn, marginRight: 10 }}>{error}</Text>
+            <Pressable
+              onPress={retryFetch}
+              style={({ pressed }) => [
+                {
+                  paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+                  borderWidth: 1, borderColor: PALETTE.border, backgroundColor: PALETTE.surface,
+                },
+                pressed && { opacity: 0.9 },
+              ]}
+            >
+              <Text style={{ color: PALETTE.green700, fontWeight: '700' }}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+        {!loading && hasList && (
+          <Text style={{ color: PALETTE.text600 }}>
+            {online ? 'Online' : 'Offline'} • {fisherOptions.length} found
+          </Text>
+        )}
+      </View>
+
+      {/* Manual fallback: allow fisherman ID entry if list is empty */}
+      {!hasList && (
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ color: PALETTE.text600, marginBottom: 6 }}>
+            No list available — enter Fisherman ID manually:
+          </Text>
+          <TextField
+            name="fisherman"
+            label="Fisherman ID"
+            placeholder="e.g., 2"
+            keyboardType="numeric"
+            rules={{ required: 'Fisherman is required' }}
+          />
+        </View>
+      )}
+
+      {/* Departure Date & Time */}
       <View style={{ marginTop: 12 }}>
         <TextField
           name="departure_time"
@@ -157,38 +259,26 @@ export default function BasicInfoSection() {
             onPress={() => setShowDatePicker(true)}
             style={({ pressed }) => [
               {
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                backgroundColor: '#FFFFFF',
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                borderWidth: 1, borderColor: PALETTE.border, backgroundColor: PALETTE.surface,
               },
               pressed && { opacity: 0.9 },
             ]}
-            accessibilityRole="button"
-            accessibilityLabel="Pick date"
           >
-            <Text style={{ fontWeight: '800', color: '#1B5E20' }}>Pick Date</Text>
+            <Text style={{ fontWeight: '800', color: PALETTE.green700 }}>Pick Date</Text>
           </Pressable>
 
           <Pressable
             onPress={() => setShowTimePicker(true)}
             style={({ pressed }) => [
               {
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                backgroundColor: '#FFFFFF',
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                borderWidth: 1, borderColor: PALETTE.border, backgroundColor: PALETTE.surface,
               },
               pressed && { opacity: 0.9 },
             ]}
-            accessibilityRole="button"
-            accessibilityLabel="Pick time"
           >
-            <Text style={{ fontWeight: '800', color: '#1B5E20' }}>Pick Time</Text>
+            <Text style={{ fontWeight: '800', color: PALETTE.green700 }}>Pick Time</Text>
           </Pressable>
         </View>
 
@@ -213,27 +303,17 @@ export default function BasicInfoSection() {
 
         {Platform.OS === 'ios' && (showDatePicker || showTimePicker) ? (
           <Pressable
-            onPress={() => {
-              setShowDatePicker(false);
-              setShowTimePicker(false);
-            }}
+            onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
             style={({ pressed }) => [
               {
-                marginTop: 8,
-                alignSelf: 'flex-start',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: '#E5E7EB',
-                backgroundColor: '#FFFFFF',
+                marginTop: 8, alignSelf: 'flex-start',
+                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                borderWidth: 1, borderColor: PALETTE.border, backgroundColor: PALETTE.surface,
               },
               pressed && { opacity: 0.9 },
             ]}
-            accessibilityRole="button"
-            accessibilityLabel="Close pickers"
           >
-            <Text style={{ fontWeight: '800', color: '#1B5E20' }}>Done</Text>
+            <Text style={{ fontWeight: '800', color: PALETTE.green700 }}>Done</Text>
           </Pressable>
         ) : null}
       </View>
@@ -250,7 +330,7 @@ export default function BasicInfoSection() {
       <DropdownField
         name="tripType"
         label="Trip Type"
-        options={TRIP_TYPE_OPTIONS}   // string[]
+        options={TRIP_TYPE_OPTIONS}
         placeholder="Select Trip Type"
         rules={{ required: 'Trip type is required' }}
       />
