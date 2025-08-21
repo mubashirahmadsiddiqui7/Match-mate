@@ -1,467 +1,416 @@
-import React, { useState } from 'react';
+/* eslint-disable react-native/no-inline-styles */
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Platform,
+  SafeAreaView,
   FlatList,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  StatusBar,
+  Platform,
 } from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MFDStaffStackParamList } from '../../../app/navigation/stacks/MFDStaffStack';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import { listTripsPage } from '../../../services/trips';
+import PALETTE from '../../../theme/palette';
 
-type Nav = NativeStackNavigationProp<MFDStaffStackParamList, 'MFDStaffHome'>;
+type TripRow = {
+  id: string | number;
+  trip_name: string;
+  status: 'pending' | 'approved' | 'active' | 'completed' | 'cancelled';
+  departure_port?: string | null;
+  destination_port?: string | null;
+  departure_time?: string | null; // display string e.g. "2025-08-20 08:43 AM"
+};
 
-const statuses = [
-  { label: 'All Statuses', value: 'All Statuses' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Active', value: 'Active' },
-  { label: 'Completed', value: 'Completed' },
-  { label: 'Cancelled', value: 'Cancelled' },
-];
-const fishingZones = [
-  { label: 'All Zones', value: 'All Zones' },
-  { label: 'Zone A - Coastal', value: 'Zone A - Coastal' },
-  { label: 'Zone B - Offshore', value: 'Zone B - Offshore' },
-  { label: 'Zone C - Deep Sea', value: 'Zone C - Deep Sea' },
-  { label: 'Zone D - Protected', value: 'Zone D - Protected' },
-  { label: 'Zone E - International', value: 'Zone E - International' },
-];
-const ports = [
-  { label: 'All Ports', value: 'All Ports' },
-  { label: 'Karachi Port', value: 'Karachi Port' },
-  { label: 'Gwadar Port', value: 'Gwadar Port' },
-  { label: 'Port Qasim', value: 'Port Qasim' },
-  { label: 'Ormara Port', value: 'Ormara Port' },
-  { label: 'Pasni Port', value: 'Pasni Port' },
-  { label: 'Jiwani Port', value: 'Jiwani Port' },
-];
-const sort = [
-  { label: 'Created Date', value: 'Created Date' },
-  { label: 'Departure Time', value: 'Departure Time' },
-  { label: 'Trip ID', value: 'Trip ID' },
-  { label: 'Status', value: 'Status' },
-];
-const order = [
-  { label: 'Ascending', value: 'Ascending' },
-  { label: 'Descending', value: 'Descending' },
-];
+const STATUS_COLORS: Record<TripRow['status'], string> = {
+  pending: PALETTE.warn,
+  approved: PALETTE.info,
+  active: PALETTE.purple,
+  completed: PALETTE.green600,
+  cancelled: PALETTE.error,
+};
 
-const trips = [
-  {
-    id: '1',
-    tripId: 'TRIP-001',
-    boat: 'Boat A',
-    port: 'Karachi Port',
-    status: 'Active',
-    departureDate: '20 Aug 2025',
-  },
-  {
-    id: '2',
-    tripId: 'TRIP-002',
-    boat: 'Boat B',
-    port: 'Gwadar Port',
-    status: 'Completed',
-    departureDate: '17 Aug 2025',
-  },
-  {
-    id: '3',
-    tripId: 'TRIP-003',
-    boat: 'Boat C',
-    port: 'Pasni Port',
-    status: 'Pending Approval',
-    departureDate: '21 Aug 2025',
-  },
-];
+export default function TripsScreen() {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | TripRow['status']>(
+    'all',
+  );
+  const [loading, setLoading] = useState(false);
+  const [trips, setTrips] = useState<TripRow[]>([]);
+  const navigation = useNavigation();
+  const handleBack = () => {
+    // go back if possible, else fall back to FishermanHome
+    // @ts-ignore
 
-export default function AllTrips() {
-  const navigation = useNavigation<Nav>();
-
-  const [value, setValue] = useState(null);
-  const [isFocus, setIsFocus] = useState(false);
-  const [date, setDate] = useState(new Date());
-  const [mode, setMode] = useState('date');
-  const [show, setShow] = useState(false);
-  const [text, setText] = useState('Empty');
-
-  const onChange = (event: any, selectedDate: Date) => {
-    const currentDate = selectedDate || date;
-    setShow(Platform.OS === 'ios');
-    setDate(currentDate);
-
-    let tempDate = new Date(currentDate);
-    let fDate =
-      tempDate.getDate() +
-      '/' +
-      (tempDate.getMonth() + 1) +
-      '/' +
-      tempDate.getFullYear();
-    setText(fDate);
-  };
-  const showMode = (currentMode: React.SetStateAction<string>) => {
-    setShow(true);
-    setMode(currentMode);
+    navigation.navigate('MFDStaffHome');
   };
 
-  const [date1, setDate1] = useState(new Date());
-  const [mode1, setMode1] = useState('date');
-  const [show1, setShow1] = useState(false);
-  const [text1, setText1] = useState('Empty');
+  // load dummy data (swap with API later)
+  const loadTrips = useCallback(async () => {
+    setLoading(true);
+    try {
+      // grab one big page (tweak per_page if you expect many)
+      const res = await listTripsPage({ page: 1, per_page: 100 });
+      setTrips(res.rows as any); // rows already match TripRow shape
+    } catch (e: any) {
+      console.log('[TripsScreen] load failed:', e?.message || e);
+      Alert.alert('Error', e?.message || 'Failed to load trips');
+      setTrips([]); // or keep prior
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const onChange1 = (event1: any, selectedDate1: Date) => {
-    const currentDate1 = selectedDate1 || date;
-    setShow1(Platform.OS === 'ios');
-    setDate1(currentDate1);
+  useEffect(() => {
+    loadTrips();
+  }, [loadTrips]);
 
-    let tempDate = new Date(currentDate1);
-    let fDate =
-      tempDate.getDate() +
-      '/' +
-      (tempDate.getMonth() + 1) +
-      '/' +
-      tempDate.getFullYear();
-    setText1(fDate);
-  };
-  const showMode1 = (currentMode1: React.SetStateAction<string>) => {
-    setShow1(true);
-    setMode1(currentMode1);
-  };
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return trips.filter(t => {
+      const okStatus =
+        statusFilter === 'all' ? true : t.status === statusFilter;
+      if (!okStatus) return false;
+      if (!q) return true;
+      const hay = [
+        t.trip_name,
+        t.departure_port ?? '',
+        // t.destination_port ?? '',
+        t.status,
+        t.departure_time ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [trips, search, statusFilter]);
 
-  return (
-    <ScrollView style={{ flex: 1 }}>
-      <View style={styles.cards}>
-        <Text style={{ color: 'green', fontWeight: 'bold', fontSize: 22 }}>
-          Trip Management
-        </Text>
-        <Text>Manage and monitor all fishing trips</Text>
-      </View>
-      <View style={styles.cards}>
-        <View style={styles.boxes}>
-          <Text>0</Text>
-          <Text>Total Trips</Text>
-        </View>
-        <View style={styles.boxes}>
-          <Text>0</Text>
-          <Text>Pending Approval</Text>
-        </View>
-        <View style={styles.boxes}>
-          <Text>0</Text>
-          <Text>Active Trips</Text>
-        </View>
-        <View style={styles.boxes}>
-          <Text>0</Text>
-          <Text>Completed</Text>
-        </View>
-        <View style={styles.boxes}>
-          <Text>0</Text>
-          <Text>Cancelled</Text>
-        </View>
-      </View>
+  function toTitle(s: string) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
 
-      <View style={styles.cards}>
-        <Text style={{ color: 'green', fontWeight: 'bold', fontSize: 18 }}>
-          Filter Trips
-        </Text>
-        <View style={styles.boxes}>
-          <Text>Search</Text>
-          <View style={{ backgroundColor: '#fafafaff', borderRadius: 12 }}>
-            <TextInput
-              placeholder="Trip ID, Boat, Port..."
-              placeholderTextColor="#8f8f8fff"
-            />
+  const renderItem = ({ item }: { item: TripRow }) => {
+    const color = STATUS_COLORS[item.status];
+    return (
+      <Pressable
+        onPress={() => navigation.navigate('TripDetails', { id: item.id })}
+        style={({ pressed }) => [styles.card, pressed && { opacity: 0.93 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open trip ${item.trip_name}`}
+      >
+        {/* Top row: Trip ID + status pill */}
+        <View style={styles.cardTop}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.trip_name}
+          </Text>
+
+          <View
+            style={[
+              styles.badge,
+              { borderColor: color, backgroundColor: '#fff' },
+            ]}
+          >
+            <View style={[styles.badgeDot, { backgroundColor: color }]} />
+            <Text style={[styles.badgeText, { color }]}>
+              {toTitle(item.status)}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.boxes}>
-          <Text>Status</Text>
-          <Dropdown
-            style={[styles.dropdown, isFocus && { borderColor: 'blue' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            data={statuses}
-            maxHeight={300}
-            labelField="label"
-            valueField="value"
-            placeholder={!isFocus ? 'Select item' : '...'}
-            value={value}
-            onFocus={() => setIsFocus(true)}
-            onBlur={() => setIsFocus(false)}
-            onChange={item => {
-              setValue(item.value);
-              setIsFocus(false);
-            }}
-          />
+        {/* Route row */}
+        <View style={styles.routeRow}>
+          <Icon name="place" size={16} color={PALETTE.text600} />
+          <Text style={styles.routeText} numberOfLines={1}>
+            {item.departure_port || 'Unknown'}
+          </Text>
+          
         </View>
-        <View style={styles.boxes}>
-          <Text>Fishing Zone</Text>
-          <Dropdown
-            style={[styles.dropdown, isFocus && { borderColor: 'blue' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            data={fishingZones}
-            maxHeight={300}
-            labelField="label"
-            valueField="value"
-            placeholder={!isFocus ? 'Select item' : '...'}
-            value={value}
-            onFocus={() => setIsFocus(true)}
-            onBlur={() => setIsFocus(false)}
-            onChange={item => {
-              setValue(item.value);
-              setIsFocus(false);
-            }}
-          />
+
+        {/* Time row */}
+        <View style={styles.timeRow}>
+          <Icon name="schedule" size={16} color={PALETTE.text600} />
+          <Text style={styles.cardTime} numberOfLines={1}>
+            {item.departure_time || 'Time not set'}
+          </Text>
         </View>
-        <View style={styles.boxes}>
-          <Text>Port</Text>
-          <Dropdown
-            style={[styles.dropdown, isFocus && { borderColor: 'blue' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            data={ports}
-            maxHeight={300}
-            labelField="label"
-            valueField="value"
-            placeholder={!isFocus ? 'Select item' : '...'}
-            value={value}
-            onFocus={() => setIsFocus(true)}
-            onBlur={() => setIsFocus(false)}
-            onChange={item => {
-              setValue(item.value);
-              setIsFocus(false);
-            }}
-          />
+
+        {/* Footer action (simple, right‑aligned) */}
+        <View style={styles.cardActions}>
+          <View style={styles.openBtn}>
+            <Text style={styles.openBtnText}>Open</Text>
+            <Icon name="chevron-right" size={18} color={PALETTE.text900} />
+          </View>
         </View>
-        <View style={styles.boxes}>
-          <Text>Date From</Text>
-          <TouchableOpacity
-            onPress={() => showMode('date')}
-            style={{ padding: 10, backgroundColor: '#f0f0f0', borderRadius: 8 }}
+      </Pressable>
+    );
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.surface }}>
+      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+
+      <View style={styles.screen}>
+        {/* Header / search row */}
+        <View style={styles.hero}>
+          <Pressable
+            onPress={handleBack}
+            style={({ pressed }) => [
+              styles.backBtn,
+              pressed && { opacity: 0.85 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
-            <Text>{text}</Text>
-          </TouchableOpacity>
+            <Icon name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          <View style={styles.heroBody}>
+            <Text style={styles.heroTitle}>All Trips</Text>
+            <Text style={styles.heroSub}>
+              {loading ? 'Loading…' : `Total: ${filtered.length}`}
+            </Text>
+          </View>
         </View>
-        <View style={styles.boxes}>
-          <Text>Date To</Text>
-          <TouchableOpacity
-            onPress={() => showMode1('date1')}
-            style={{ padding: 10, backgroundColor: '#f0f0f0', borderRadius: 8 }}
-          >
-            <Text>{text1}</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.boxes}>
-          <Text>Sort By</Text>
-          <Dropdown
-            style={[styles.dropdown, isFocus && { borderColor: 'blue' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            data={sort}
-            maxHeight={300}
-            labelField="label"
-            valueField="value"
-            placeholder={!isFocus ? 'Select item' : '...'}
-            value={value}
-            onFocus={() => setIsFocus(true)}
-            onBlur={() => setIsFocus(false)}
-            onChange={item => {
-              setValue(item.value);
-              setIsFocus(false);
-            }}
+
+        <View style={styles.searchRow}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by trip, port, status…"
+            placeholderTextColor="#9CA3AF"
+            style={styles.searchInput}
           />
         </View>
-        <View style={styles.boxes}>
-          <Text>Sort Order</Text>
-          <Dropdown
-            style={[styles.dropdown, isFocus && { borderColor: 'blue' }]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            data={order}
-            maxHeight={300}
-            labelField="label"
-            valueField="value"
-            placeholder={!isFocus ? 'Select item' : '...'}
-            value={value}
-            onFocus={() => setIsFocus(true)}
-            onBlur={() => setIsFocus(false)}
-            onChange={item => {
-              setValue(item.value);
-              setIsFocus(false);
-            }}
-          />
+
+        {/* Filter chips */}
+        <View style={styles.chipsRow}>
+          {(
+            [
+              'all',
+              'pending',
+              'approved',
+              'active',
+              'completed',
+              'cancelled',
+            ] as const
+          ).map(st => (
+            <Pressable
+              key={st}
+              onPress={() => setStatusFilter(st)}
+              style={({ pressed }) => [
+                styles.chip,
+                statusFilter === st && styles.chipActive,
+                pressed && { opacity: 0.9 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter ${st}`}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  statusFilter === st && styles.chipTextActive,
+                ]}
+              >
+                {st[0].toUpperCase() + st.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
-      </View>
 
-      {show && (
-        <DateTimePicker
-          testID="dateTimePicker"
-          value={date}
-          mode={mode}
-          is24Hour={true}
-          display="default"
-          onChange={onChange}
-        />
-      )}
-      {show1 && (
-        <DateTimePicker
-          testID="dateTimePicker"
-          value={date1}
-          mode={mode1}
-          is24Hour={true}
-          display="default"
-          onChange={onChange1}
-        />
-      )}
-
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-around',
-          margin: 10,
-        }}
-      >
-        <TouchableOpacity
-          style={{
-            backgroundColor: '#2196F3',
-            padding: 10,
-            borderRadius: 5,
-            paddingHorizontal: 40,
-          }}
-        >
-          <Text style={{ color: 'white' }}>Statistics</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{
-            backgroundColor: '#4CAF50',
-            padding: 10,
-            borderRadius: 5,
-            paddingHorizontal: 40,
-          }}
-        >
-          <Text style={{ color: 'white' }}>Export</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.cards}>
-        <Text style={{ color: '#c7c427ff', fontWeight: 'bold', fontSize: 22 }}>
-          Trip List
-        </Text>
+        {/* List */}
         <FlatList
-          keyExtractor={item => item.id}
-          data={trips}
-          renderItem={({ item }) => {
-            return (
-              <View style={styles.listBox}>
-                <View>
-                  <Text style={styles.tripId}>{item.tripId}</Text>
-                  <Text style={styles.text}>{item.boat}</Text>
-                  <Text style={styles.text}>{item.port}</Text>
-                  <Text style={[styles.text, styles.status(item.status)]}>
-                    {item.status}
+          data={filtered}
+          keyExtractor={it => String(it.id)}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              {loading ? (
+                <ActivityIndicator />
+              ) : (
+                <>
+                  <Text style={styles.emptyTitle}>No trips</Text>
+                  <Text style={styles.emptySub}>
+                    Try changing filters or search.
                   </Text>
-                  <Text style={styles.text}>{item.departureDate}</Text>
-                </View>
-
-                <View style={{ justifyContent: 'center' }}>
-                  <TouchableOpacity
-                    style={{
-                      marginBottom: 15,
-                      backgroundColor: '#f6f6f6ff',
-                      padding: 10,
-                      borderRadius: 8,
-                    }}
-                    onPress={() => navigation.navigate('CurrentTrip')}
-                  >
-                    <Text style={{ alignSelf: 'center' }}>View</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={{
-                      marginTop: 15,
-                      backgroundColor: '#80f073ff',
-                      padding: 10,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text>Approve</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          }}
+                </>
+              )}
+            </View>
+          }
+          refreshing={loading}
+          onRefresh={loadTrips}
+          contentContainerStyle={{ paddingVertical: 12 }}
         />
       </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
+
+/* ---------- styles ---------- */
 const styles = StyleSheet.create({
-  cards: {
-    padding: 20,
-    margin: 10,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  screen: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 38,
+    paddingBottom: 12,
+    backgroundColor: PALETTE.surface,
   },
-  boxes: {
-    backgroundColor: '#dededeff',
-    padding: 10,
-    borderRadius: 14,
-    marginVertical: 5,
-    alignItems: 'center',
-  },
-  dropdown: {
-    height: 50,
-    borderColor: 'gray',
-    borderWidth: 0.5,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    width: 250,
-    backgroundColor: '#f0f0f0',
-  },
-  placeholderStyle: {
-    fontSize: 16,
-  },
-  selectedTextStyle: {
-    fontSize: 16,
-  },
-  listBox: {
-    padding: 16,
-    margin: 10,
-    backgroundColor: '#dededeff',
-    borderRadius: 20,
+
+  hero: {
+    backgroundColor: PALETTE.green700,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     flexDirection: 'row',
+    alignItems: 'center',
+    ...shadow(0.08, 8, 3),
+  },
+  backBtn: {
+    padding: 6,
+    borderRadius: 999,
+    marginRight: 8,
+  },
+  heroBody: { flex: 1 },
+  heroTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  heroSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+
+  searchRow: { marginTop: 10 },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    color: PALETTE.text900,
+  },
+
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 6,
+    flexWrap: 'wrap',
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+  },
+  chipActive: {
+    backgroundColor: PALETTE.green50,
+    borderColor: PALETTE.green600,
+  },
+  chipText: { color: PALETTE.text700, fontWeight: '700' },
+  chipTextActive: { color: PALETTE.green700 },
+
+  card: {
+    backgroundColor: PALETTE.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    padding: 12,
+    ...shadow(0.05, 8, 3),
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     justifyContent: 'space-between',
   },
-
-  tripId: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0e6dbaff',
-    marginBottom: 8,
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: PALETTE.text900,
+    flex: 1,
   },
 
-  text: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 4,
+  routeRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeText: {
+    marginLeft: 6,
+    color: PALETTE.text700,
+    fontWeight: '700',
+    maxWidth: '44%',
   },
 
-  status: status => ({
-    color:
-      status === 'Active'
-        ? '#27ae60'
-        : status === 'Completed'
-        ? '#2980b9'
-        : '#e67e22',
-    fontWeight: '700',
-  }),
+  timeRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardTime: { color: PALETTE.text700, fontWeight: '600' },
+
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  badgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  badgeText: { fontSize: 12, fontWeight: '800' },
+
+  cardActions: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  openBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+  },
+  openBtnText: { color: PALETTE.text900, fontWeight: '800' },
+
+  btn: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  btnGhost: {
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+  },
+  btnGhostText: { color: PALETTE.text900, fontWeight: '800' },
+
+  empty: { alignItems: 'center', marginTop: 40, paddingHorizontal: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: PALETTE.text900 },
+  emptySub: { marginTop: 6, color: PALETTE.text600, textAlign: 'center' },
 });
+
+/* ---- shadow helper ---- */
+function shadow(opacity: number, radius: number, height: number) {
+  if (Platform.OS === 'android') return { elevation: 2 };
+  return {
+    shadowColor: '#000',
+    shadowOpacity: opacity,
+    shadowRadius: radius,
+    shadowOffset: { width: 0, height },
+  };
+}

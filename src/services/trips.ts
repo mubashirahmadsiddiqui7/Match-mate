@@ -337,8 +337,6 @@ export async function approveTrip(id: ID) {
   return unwrap<Trip>(json);
 }
 
-
-
 /* =========================
  * Location & Media
  * ========================= */
