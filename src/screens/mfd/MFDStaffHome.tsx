@@ -243,12 +243,12 @@ export default function MFDStaffHome() {
               subtitle="Browse & review"
               onPress={goAllTrips}
             />
-            <ActionTile
+            {/* <ActionTile
               icon="assessment"
               title="View Reports"
               subtitle="Analytics & KPIs"
               onPress={goReports}
-            />
+            /> */}
           </View>
         </View>
 
