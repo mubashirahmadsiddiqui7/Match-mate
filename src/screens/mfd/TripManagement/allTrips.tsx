@@ -11,6 +11,11 @@ import {
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MFDStaffStackParamList } from '../../../app/navigation/stacks/MFDStaffStack';
+
+type Nav = NativeStackNavigationProp<MFDStaffStackParamList, 'MFDStaffHome'>;
 
 const statuses = [
   { label: 'All Statuses', value: 'All Statuses' },
@@ -76,6 +81,8 @@ const trips = [
 ];
 
 export default function AllTrips() {
+  const navigation = useNavigation<Nav>();
+
   const [value, setValue] = useState(null);
   const [isFocus, setIsFocus] = useState(false);
   const [date, setDate] = useState(new Date());
@@ -369,6 +376,7 @@ export default function AllTrips() {
                       padding: 10,
                       borderRadius: 8,
                     }}
+                    onPress={() => navigation.navigate('CurrentTrip')}
                   >
                     <Text style={{ alignSelf: 'center' }}>View</Text>
                   </TouchableOpacity>
