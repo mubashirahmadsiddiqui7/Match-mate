@@ -33,6 +33,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
   createTrip,
   getTripById,
+  startTrip,
   updateTrip,
   type TripDetails,
 } from '../../../services/trips';
@@ -42,7 +43,6 @@ import { enqueueTrip, processQueue } from '../../../offline/TripQueues';
 
 const HEADER_BG = '#1f720d';
 type TripRoute = RouteProp<FishermanStackParamList, 'Trip'>;
-
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'Trip'>;
 
 // ---- helpers ----
@@ -62,9 +62,26 @@ const TRIP_TYPE_REVERSE: Record<string, string> = Object.fromEntries(
   Object.entries(TRIP_TYPE_MAP).map(([label, val]) => [val, label]),
 );
 
+// Some servers return { success, message, trip: {...} }, others { data: {...} }.
+// This extracts the actual trip DTO in a stable way.
+function extractTripFromCreateResponse(created: any) {
+  if (!created) return null;
+  if (created.trip && typeof created.trip === 'object') return created.trip;
+  if (created.data && typeof created.data === 'object') return created.data;
+  // fallback: maybe the top-level already is the trip
+  if (created.id && created.trip_id) return created;
+  return null;
+}
+
 export default function AddTripScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<TripRoute>();
+
+  const [createdTrip, setCreatedTrip] = useState<{
+    id: number | string;
+    trip_id?: string;
+  } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const isEdit = !!params?.id || params?.mode === 'edit';
   const editingId = params?.id;
@@ -121,14 +138,14 @@ export default function AddTripScreen() {
         crewCount: t.crew_count != null ? String(t.crew_count) : '',
         tripType:
           TRIP_TYPE_REVERSE[t.trip_type ?? ''] || t.trip_type || 'Fishing Trip',
-        tripPurpose: '', // server has trip_purpose? Add if you store it.
+        tripPurpose: '',
         departure_port: t.departure_port ?? '',
-        destination_port: '', // fill if you store a distinct destination in server
-        seaType: '', // if you store sea_type; not present in sample payload
+        destination_port: '',
+        seaType: '',
         seaConditions: t.sea_conditions ?? '',
         emergencyContact: t.emergency_contact ?? '',
         targetSpecies: t.target_species ?? '',
-        tripCost: '', // if you track trip_cost separately
+        tripCost: '',
         fuelCost: t.fuel_cost != null ? String(t.fuel_cost) : '',
         estimatedCatch:
           t.estimated_catch != null ? String(t.estimated_catch) : '',
@@ -185,7 +202,7 @@ export default function AddTripScreen() {
         fisherman_id: fishermanId,
         trip_type,
         port_location,
-        crew_count: Number(values.crewCount || 0), // your backend accepted crew_count for create
+        crew_count: Number(values.crewCount || 0), // backend accepts crew_count for create
 
         departure_port: values.departure_port || undefined,
         destination_port: values.destination_port || undefined,
@@ -223,17 +240,32 @@ export default function AddTripScreen() {
           'Saved Offline',
           'No internet. Trip added to upload queue and will auto-submit when online.',
         );
-        // Optionally go back to home
         navigation.navigate('FishermanHome');
         return;
       }
 
       try {
-        // Try live submit first
-        await createTrip(body as any);
-        Alert.alert('Trip created', `Trip ${tripId} was saved successfully.`, [
-          { text: 'OK', onPress: () => navigation.navigate('FishermanHome') },
-        ]);
+        // Create live; keep created id to show Start button
+        const created = await createTrip(body as any);
+
+        // Robustly extract the inner trip (API returns { success, message, trip: {...} })
+        const dto = extractTripFromCreateResponse(created);
+        if (!dto) {
+          // Fallback: still inform success (we got 201), but we cannot start immediately
+          Alert.alert(
+            'Trip created',
+            `Trip ${tripId} was saved successfully. (Start button unavailable: missing server id)`,
+          );
+          return;
+        }
+
+        setCreatedTrip({ id: dto.id, trip_id: dto.trip_id });
+        Alert.alert(
+          'Trip created',
+          `Trip ${
+            dto.trip_id ?? tripId
+          } was saved successfully. You can start it now.`,
+        );
       } catch (err: any) {
         // Network/server temporary issues → fallback to queue
         await enqueueTrip(body as any);
@@ -242,7 +274,6 @@ export default function AddTripScreen() {
           'Temporary issue submitting. Trip moved to upload queue and will auto-submit when online.',
         );
         navigation.navigate('FishermanHome');
-        // Kick the processor (in case we’re still online and it was a transient error)
         processQueue();
       }
     } catch (err: any) {
@@ -255,13 +286,10 @@ export default function AddTripScreen() {
 
   // Build a small patch with only dirty changes:
   const buildPatch = (values: FormValues) => {
-    // If you need exact dirty fields: methods.formState.dirtyFields (nested flags)
-    // For simplicity, compare against initialValues snapshot when editing.
     const from = initialValues || values;
     const changed = <T extends keyof FormValues>(key: T) =>
       values[key] !== from[key];
 
-    // Map labels -> enums again
     const tripTypeRaw = values.tripType?.trim() || 'Fishing Trip';
     const trip_type = TRIP_TYPE_MAP[tripTypeRaw] ?? 'fishing';
 
@@ -269,7 +297,6 @@ export default function AddTripScreen() {
     const dt = departureDisplay ? parseYmd12h(departureDisplay) : null;
     const departure_date = dt ? formatYmd(dt) : undefined;
 
-    // Patch uses server field names commonly accepted by your API on update
     const patch: Record<string, any> = {};
     if (changed('fisherman'))
       patch.fisherman_id = values.fisherman
@@ -293,7 +320,6 @@ export default function AddTripScreen() {
 
     if (changed('crewCount')) {
       const n = values.crewCount === '' ? undefined : Number(values.crewCount);
-      // Your updateTrip earlier used crew_size; some endpoints accept crew_count too.
       patch.crew_size = n;
       patch.crew_count = n;
     }
@@ -318,15 +344,12 @@ export default function AddTripScreen() {
           ? Number(values.estimatedCatch)
           : undefined;
     if (changed('equipmentCost')) {
-      // Your detail screen shows "Operational Cost" from operational_cost
-      patch.operational_cost =
+      const n =
         values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
-      // If your server expects equipment_cost instead, keep both:
-      patch.equipment_cost =
-        values.equipmentCost !== '' ? Number(values.equipmentCost) : undefined;
+      patch.operational_cost = n;
+      patch.equipment_cost = n;
     }
 
-    // port_location convenience (if either port changed)
     if (changed('departure_port') || changed('destination_port')) {
       patch.port_location =
         values.destination_port?.trim() ||
@@ -340,7 +363,6 @@ export default function AddTripScreen() {
   const onSaveEdit = methods.handleSubmit(async values => {
     if (!isEdit || !editingId) return;
 
-    // crew count guard (1–50) if present
     if (values.crewCount !== '') {
       const n = Number(values.crewCount);
       if (Number.isNaN(n) || n < 1 || n > 50) {
@@ -370,7 +392,26 @@ export default function AddTripScreen() {
   const headerTitle = isEdit ? 'Edit Trip' : 'Add Trip';
   const chipTripId = isEdit
     ? serverTrip?.trip_name ?? serverTrip?.id ?? ''
-    : tripId;
+    : createdTrip?.trip_id ?? tripId;
+
+  // ---- start trip (after create) ----
+  const handleStart = useCallback(async () => {
+    if (!createdTrip?.id) return;
+    try {
+      setActionLoading(true);
+      // await startTrip(createdTrip.id);
+      // Alert.alert('Trip Started', 'Status updated to Active.');
+      // Navigate to Lots screen with the trip id
+      navigation.navigate('FishingActivity', {
+        tripId: createdTrip.id,
+        activityNo: 1,
+      });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to start trip');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [createdTrip, navigation]);
 
   return (
     <SafeAreaView
@@ -481,8 +522,36 @@ export default function AddTripScreen() {
                 />
               </SectionCard>
 
-              {/* Save bar: GPS required only for create */}
-              <SaveBar gpsAvailable={isEdit ? true : !!gps} onSave={onSave} />
+              {/* Save bar: GPS required only for create.
+                 Hide after create; show Start button instead. */}
+              {!isEdit && !createdTrip?.id ? (
+                <SaveBar gpsAvailable={!!gps} onSave={onSave} />
+              ) : null}
+
+              {!isEdit && createdTrip?.id ? (
+                <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+                  <Pressable
+                    onPress={handleStart}
+                    disabled={actionLoading}
+                    style={({ pressed }) => [
+                      {
+                        height: 48,
+                        borderRadius: 12,
+                        backgroundColor: '#1f720d',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: actionLoading ? 0.7 : pressed ? 0.9 : 1,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Start Trip"
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>
+                      {actionLoading ? 'Starting…' : 'Start Trip'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </FormProvider>
           </ScrollView>
         )}

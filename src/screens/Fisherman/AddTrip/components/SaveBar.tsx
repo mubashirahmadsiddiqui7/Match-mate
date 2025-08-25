@@ -16,7 +16,6 @@ export default function SaveBar({ gpsAvailable, onSave }: Props) {
 
   // Validate only trip cost now
   const costValid = Number(tripCost) >= 0;
-
   const disabled = !gpsAvailable || !costValid;
 
   return (

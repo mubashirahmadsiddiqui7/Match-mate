@@ -1,6 +1,6 @@
 // src/screens/Fisherman/AddTrip/constants.ts
 export const PORTS = [
-  'Karachi Port', 'Port Qasim', 'Gwadar Port', 'Pasni Port', 'Ormara Port',
+  'karachi fish harbor','korangi fish harbor', 'Port Qasim', 'Gwadar Port', 'Pasni Port', 'Ormara Port',
   'Jiwani Port',
 ];
 

@@ -2,6 +2,11 @@
 export interface FormValues {
   fisherman: string;
   boatNameId: string;
+  captainNameId: string;
+  captainPhone: string;
+  crewNo: string;
+  port_clearance_no: string;
+  ICE: string;
   tripType:string;
   tripPurpose: string;
   departure_port: string;

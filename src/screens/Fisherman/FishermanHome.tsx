@@ -76,6 +76,8 @@ const FishermanHome = () => {
   const navNewTrip = useCallback(() => navigation.navigate('Trip'), [navigation]);
   const navCreateLots = useCallback(() => navigation.navigate('Lots'), [navigation]);
   const navAllLots = useCallback(() => navigation.navigate('LotsList'), [navigation]);
+  const navNewBoats = useCallback(() => navigation.navigate('Boat'), [navigation]);
+
 
   useLayoutEffect(() => {
     navigation.setOptions?.({
@@ -154,6 +156,11 @@ const FishermanHome = () => {
               label="+ New Trip"
               iconSource={require('../../assets/images/boatIcon.png')}
               onPress={navNewTrip}
+            />
+            <ActionCard
+              label="+ Register Boat"
+              iconSource={require('../../assets/images/boatIcon.png')}
+              onPress={navNewBoats}
             />
             <ActionCard
               label="+ Create Lots"

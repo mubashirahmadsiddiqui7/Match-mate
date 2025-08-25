@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unstable-nested-components */
 // src/screens/Fisherman/TripDetails/TripDetailsScreen.tsx
 /* eslint-disable react-native/no-inline-styles */
 import React, { useCallback, useEffect, useState } from 'react';
@@ -14,7 +15,11 @@ import {
   Platform,
   ToastAndroid,
 } from 'react-native';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -28,7 +33,11 @@ import {
 } from '../../../services/trips';
 import { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
 import PALETTE from '../../../theme/palette';
-import { CancelTripModal, CompleteTripModal, type CompleteForm } from './TripActionModals';
+import {
+  CancelTripModal,
+  CompleteTripModal,
+  type CompleteForm,
+} from './TripActionModals';
 
 /* ---------- constants ---------- */
 const PRIMARY = PALETTE.green700;
@@ -108,9 +117,9 @@ export default function TripDetailsScreen() {
     }, [load]),
   );
 
-  const isPending  = trip?.status === 'pending';
+  const isPending = trip?.status === 'pending';
   const isApproved = trip?.status === 'approved';
-  const isActive   = trip?.status === 'active';
+  const isActive = trip?.status === 'active';
   const statusColor = trip ? STATUS_COLORS[trip.status] : PALETTE.text700;
 
   const reload = useCallback(async () => {
@@ -137,43 +146,55 @@ export default function TripDetailsScreen() {
     }
   }, [trip, reload]);
 
-  const handleCancel = useCallback(async (reason: string) => {
-    if (!trip) return;
-    try {
-      setActionLoading(true);
-      await cancelTrip(trip.id, { cancellation_reason: reason });
-      Alert.alert('Trip Cancelled', 'Status updated to Cancelled.');
-      setShowCancel(false);
-      await reload();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to cancel trip');
-    } finally {
-      setActionLoading(false);
-    }
-  }, [trip, reload]);
+  const handleCancel = useCallback(
+    async (reason: string) => {
+      if (!trip) return;
+      try {
+        setActionLoading(true);
+        await cancelTrip(trip.id, { cancellation_reason: reason });
+        Alert.alert('Trip Cancelled', 'Status updated to Cancelled.');
+        setShowCancel(false);
+        await reload();
+      } catch (e: any) {
+        Alert.alert('Error', e?.message || 'Failed to cancel trip');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [trip, reload],
+  );
 
-  const handleComplete = useCallback(async (form: CompleteForm) => {
-    if (!trip) return;
-    try {
-      setActionLoading(true);
-      await completeTrip(trip.id, {
-        arrival_port: form.arrival_port.trim(),
-        arrival_notes: form.arrival_notes?.trim() || undefined,
-        estimated_catch_weight: form.estimated_catch_weight ? Number(form.estimated_catch_weight) : undefined,
-        catch_notes: form.catch_notes?.trim() || undefined,
-        revenue: form.revenue ? Number(form.revenue) : undefined,
-        arrival_latitude: form.arrival_latitude ? Number(form.arrival_latitude) : undefined,
-        arrival_longitude: form.arrival_longitude ? Number(form.arrival_longitude) : undefined,
-      });
-      Alert.alert('Trip Completed', 'Status updated to Completed.');
-      setShowComplete(false);
-      await reload();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to complete trip');
-    } finally {
-      setActionLoading(false);
-    }
-  }, [trip, reload]);
+  const handleComplete = useCallback(
+    async (form: CompleteForm) => {
+      if (!trip) return;
+      try {
+        setActionLoading(true);
+        await completeTrip(trip.id, {
+          arrival_port: form.arrival_port.trim(),
+          arrival_notes: form.arrival_notes?.trim() || undefined,
+          estimated_catch_weight: form.estimated_catch_weight
+            ? Number(form.estimated_catch_weight)
+            : undefined,
+          catch_notes: form.catch_notes?.trim() || undefined,
+          revenue: form.revenue ? Number(form.revenue) : undefined,
+          arrival_latitude: form.arrival_latitude
+            ? Number(form.arrival_latitude)
+            : undefined,
+          arrival_longitude: form.arrival_longitude
+            ? Number(form.arrival_longitude)
+            : undefined,
+        });
+        Alert.alert('Trip Completed', 'Status updated to Completed.');
+        setShowComplete(false);
+        await reload();
+      } catch (e: any) {
+        Alert.alert('Error', e?.message || 'Failed to complete trip');
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [trip, reload],
+  );
 
   const handleDelete = useCallback(() => {
     if (!trip) return;
@@ -215,7 +236,9 @@ export default function TripDetailsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView
+        style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+      >
         <ActivityIndicator />
       </SafeAreaView>
     );
@@ -249,7 +272,11 @@ export default function TripDetailsScreen() {
       return (
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Pressable
-            style={[styles.halfBtn, { backgroundColor: DANGER }, actionLoading && { opacity: 0.6 }]}
+            style={[
+              styles.halfBtn,
+              { backgroundColor: DANGER },
+              actionLoading && { opacity: 0.6 },
+            ]}
             onPress={() => setShowCancel(true)}
             disabled={actionLoading}
           >
@@ -258,7 +285,11 @@ export default function TripDetailsScreen() {
           </Pressable>
 
           <Pressable
-            style={[styles.halfBtn, { backgroundColor: PRIMARY }, actionLoading && { opacity: 0.6 }]}
+            style={[
+              styles.halfBtn,
+              { backgroundColor: PRIMARY },
+              actionLoading && { opacity: 0.6 },
+            ]}
             onPress={() => setShowComplete(true)}
             disabled={actionLoading}
           >
@@ -279,21 +310,31 @@ export default function TripDetailsScreen() {
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: PRIMARY }]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.iconBtn} accessibilityLabel="Back">
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={styles.iconBtn}
+          accessibilityLabel="Back"
+        >
           <MaterialIcons name="arrow-back" size={22} color="#fff" />
         </Pressable>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.title} numberOfLines={1}>{trip.trip_name}</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {trip.trip_name}
+          </Text>
 
           <View style={styles.statusPill}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <View
+              style={[styles.statusDot, { backgroundColor: statusColor }]}
+            />
             <Text style={[styles.statusText, { color: statusColor }]}>
               {toTitle(trip.status)}
             </Text>
           </View>
 
-          {trip.trip_type ? <Text style={styles.subtitle}>{trip.trip_type}</Text> : null}
+          {trip.trip_type ? (
+            <Text style={styles.subtitle}>{trip.trip_type}</Text>
+          ) : null}
         </View>
 
         {/* Pending-only header actions */}
@@ -327,7 +368,9 @@ export default function TripDetailsScreen() {
       <View style={[styles.quickStrip, shadow(0.05, 8, 3)]}>
         <View style={styles.quickItem}>
           <MaterialIcons name="schedule" size={16} color={PALETTE.text600} />
-        <Text style={styles.quickText}>{trip.departure_time || 'Time not set'}</Text>
+          <Text style={styles.quickText}>
+            {trip.departure_time || 'Time not set'}
+          </Text>
         </View>
         <View style={styles.quickDivider} />
         <View style={styles.quickItem}>
@@ -349,43 +392,101 @@ export default function TripDetailsScreen() {
         <Section title="Basic Trip Information" icon="assignment">
           <Row icon="person" label="Fisherman" value={trip.fisherman?.name} />
           <Row icon="category" label="Trip Type" value={trip.trip_type} />
-          <Row icon="sailing" label="Boat Reg. No." value={trip.boat_registration_no} />
-          <Row icon="directions-boat" label="Boat Name" value={trip.boat_name} />
+          <Row
+            icon="sailing"
+            label="Boat Reg. No."
+            value={trip.boat_registration_no}
+          />
+          <Row
+            icon="directions-boat"
+            label="Boat Name"
+            value={trip.boat_name}
+          />
         </Section>
 
         {/* Location & Schedule */}
         <Section title="Location & Schedule" icon="map">
-          <Row icon="directions-boat" label="Departure Port" value={trip.departure_port} />
-          <Row icon="schedule" label="Departure Time" value={trip.departure_time} />
+          <Row
+            icon="directions-boat"
+            label="Departure Port"
+            value={trip.departure_port}
+          />
+          <Row
+            icon="schedule"
+            label="Departure Time"
+            value={trip.departure_time}
+          />
           <Row icon="public" label="Fishing Zone" value={trip.fishing_zone} />
           <Row icon="place" label="Port Location" value={trip.port_location} />
-          <Row icon="my-location" label="Departure Lat" value={String(trip.departure_lat ?? '—')} />
-          <Row icon="my-location" label="Departure Lng" value={String(trip.departure_lng ?? '—')} />
+          <Row
+            icon="my-location"
+            label="Departure Lat"
+            value={String(trip.departure_lat ?? '—')}
+          />
+          <Row
+            icon="my-location"
+            label="Departure Lng"
+            value={String(trip.departure_lng ?? '—')}
+          />
         </Section>
 
         {/* Safety & Weather */}
         <Section title="Safety & Weather" icon="health-and-safety">
           <Row icon="groups" label="Crew Count" value={n(trip.crew_count)} />
-          <Row icon="contacts" label="Emergency Contact" value={trip.emergency_contact} />
-          <Row icon="medical-services" label="Safety Equipment" value={trip.safety_equipment} />
+          <Row
+            icon="contacts"
+            label="Emergency Contact"
+            value={trip.emergency_contact}
+          />
+          <Row
+            icon="medical-services"
+            label="Safety Equipment"
+            value={trip.safety_equipment}
+          />
           <Row icon="cloud" label="Weather" value={trip.weather} />
-          <Row icon="waves" label="Sea Conditions" value={trip.sea_conditions} />
+          <Row
+            icon="waves"
+            label="Sea Conditions"
+            value={trip.sea_conditions}
+          />
           <Row icon="air" label="Wind Speed" value={n(trip.wind_speed)} />
           <Row icon="opacity" label="Wave Height" value={n(trip.wave_height)} />
         </Section>
 
         {/* Fishing & Costs */}
         <Section title="Fishing & Costs" icon="attach-money">
-          <Row icon="restaurant" label="Target Species" value={trip.target_species} />
-          <Row icon="scale" label="Estimated Catch (kg)" value={n(trip.estimated_catch)} />
-          <Row icon="local-gas-station" label="Fuel Cost" value={currency(trip.fuel_cost)} />
-          <Row icon="build" label="Operational Cost" value={currency(trip.operational_cost)} />
-          <Row icon="summarize" label="Total Cost" value={currency(trip.total_cost)} />
+          <Row
+            icon="restaurant"
+            label="Target Species"
+            value={trip.target_species}
+          />
+          <Row
+            icon="scale"
+            label="Estimated Catch (kg)"
+            value={n(trip.estimated_catch)}
+          />
+          <Row
+            icon="local-gas-station"
+            label="Fuel Cost"
+            value={currency(trip.fuel_cost)}
+          />
+          <Row
+            icon="build"
+            label="Operational Cost"
+            value={currency(trip.operational_cost)}
+          />
+          <Row
+            icon="summarize"
+            label="Total Cost"
+            value={currency(trip.total_cost)}
+          />
         </Section>
 
         {/* Notes */}
         <Section title="Notes" icon="sticky-note-2">
-          <Row value={(trip as any).notes ?? (trip as any).trip_purpose ?? '—'} />
+          <Row
+            value={(trip as any).notes ?? (trip as any).trip_purpose ?? '—'}
+          />
         </Section>
 
         {/* Fish Lots */}
@@ -394,7 +495,11 @@ export default function TripDetailsScreen() {
             <View style={{ gap: 8 }}>
               {trip.lots.map(l => (
                 <View key={String(l.id)} style={styles.lotRow}>
-                  <MaterialIcons name="chevron-right" size={18} color={PALETTE.text700} />
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={18}
+                    color={PALETTE.text700}
+                  />
                   <Text style={styles.lotText}>
                     Lot #{l.id} — {toTitle(l.status)}
                     {l.lot_no ? `  (${l.lot_no})` : ''}
@@ -486,11 +591,21 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 18,
     ...Platform.select({
-      ios: { shadowColor: '#0B3A05', shadowOpacity: 0.22, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+      ios: {
+        shadowColor: '#0B3A05',
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+      },
       android: { elevation: 6 },
     }),
   },
-  bigBtnText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 0.2 },
+  bigBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
 
   halfBtn: {
     flex: 1,
@@ -514,7 +629,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  statusDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#fff' },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#fff',
+  },
   statusText: { fontWeight: '800', fontSize: 12 },
 
   headerBtn: {
@@ -551,8 +671,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  quickItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  quickDivider: { width: 1, height: 18, backgroundColor: PALETTE.border, marginHorizontal: 10 },
+  quickItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  quickDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: PALETTE.border,
+    marginHorizontal: 10,
+  },
   quickText: { color: PALETTE.text900, fontWeight: '700', flexShrink: 1 },
 
   card: {
@@ -573,7 +703,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
   },
-  label: { color: PALETTE.text600, fontSize: 12, marginBottom: 6, fontWeight: '700' },
+  label: {
+    color: PALETTE.text600,
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '700',
+  },
   value: { color: PALETTE.text900, fontWeight: '800' },
 
   lotRow: {
