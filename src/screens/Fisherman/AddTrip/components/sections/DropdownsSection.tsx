@@ -8,15 +8,15 @@ export default function DropdownsSection() {
     <>
       <DropdownField
         name="departure_port"
-        label="Port Location"
+        label="Departure Site"
         options={PORTS}
-        rules={{ required: 'port location is required' }}
+        rules={{ required: 'Departure site is required' }}
       />
       <DropdownField
         name="destination_port"
-        label="Departure Location"
+        label="Destination Site"
         options={PORTS}
-        rules={{ required: 'departure location is required' }}
+        rules={{ required: 'Destination site is required' }}
       />
       
       <DropdownField
