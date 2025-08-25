@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 /* src/screens/Fisherman/AddLot/index.tsx */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -49,7 +50,7 @@ type TripRow = {
   destination_port?: string | null;
   departure_time?: string | null;
 };
- 
+
 export default function AddLotScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<LotsRoute>();
@@ -84,7 +85,7 @@ export default function AddLotScreen() {
   const loadTrips = useCallback(async () => {
     setLoadingTrips(true);
     try {
-      const res = await api('http://192.168.18.44:8000/api/trips', {
+      const res = await api('trips', {
         query: { page: 1, per_page: 100 },
       });
       const rows: TripRow[] = (res?.data?.data ?? []).map((t: any) => ({
@@ -133,15 +134,14 @@ export default function AddLotScreen() {
 
   // dropdown & validations
   const tripOptions = useMemo(
-    () =>
-      trips.map(t => ({ label: t.trip_id, value: t.id })),
-    [trips]
+    () => trips.map(t => ({ label: t.trip_id, value: t.id })),
+    [trips],
   );
 
   const selectedTripValue = methods.watch('tripId');
   const selectedTripLabel = useMemo(() => {
     const found = tripOptions.find(
-      o => String(o.value) === String(selectedTripValue ?? '')
+      o => String(o.value) === String(selectedTripValue ?? ''),
     );
     return found?.label;
   }, [tripOptions, selectedTripValue]);
@@ -160,11 +160,21 @@ export default function AddLotScreen() {
       return;
     }
     if (!gps) {
-      Alert.alert('Location required', 'Please capture location before saving.');
+      Alert.alert(
+        'Location required',
+        'Please capture location before saving.',
+      );
       return;
     }
-    if (!values.species?.trim() || !values.grade?.trim() || Number(values.weightKg) <= 0) {
-      Alert.alert('Missing info', 'Please fill species, grade, and a weight > 0.');
+    if (
+      !values.species?.trim() ||
+      !values.grade?.trim() ||
+      Number(values.weightKg) <= 0
+    ) {
+      Alert.alert(
+        'Missing info',
+        'Please fill species, grade, and a weight > 0.',
+      );
       return;
     }
 
@@ -219,7 +229,11 @@ export default function AddLotScreen() {
         setLotNo(buildLotNo());
       }
     } catch (err: any) {
-      Alert.alert('Failed', err?.message || (isEdit ? 'Could not update lot.' : 'Could not create lot.'));
+      Alert.alert(
+        'Failed',
+        err?.message ||
+          (isEdit ? 'Could not update lot.' : 'Could not create lot.'),
+      );
     } finally {
       setSaving(false);
     }
@@ -233,7 +247,10 @@ export default function AddLotScreen() {
   return (
     <>
       <SafeAreaView edges={['top']} style={{ backgroundColor: theme.primary }}>
-        <FocusAwareStatusBar barStyle="light-content" backgroundColor={theme.primary} />
+        <FocusAwareStatusBar
+          barStyle="light-content"
+          backgroundColor={theme.primary}
+        />
       </SafeAreaView>
 
       <SafeAreaView style={s.page} edges={['left', 'right', 'bottom']}>
@@ -254,7 +271,9 @@ export default function AddLotScreen() {
           <View style={s.chipRow}>
             <View style={s.chip}>
               <Text style={s.chipLabel}>Lot No</Text>
-              <Text style={s.chipValue} numberOfLines={1}>{lotNo}</Text>
+              <Text style={s.chipValue} numberOfLines={1}>
+                {lotNo}
+              </Text>
             </View>
             <View style={[s.chip, gps ? s.chipOk : s.chipWarn]}>
               <Text style={s.chipLabel}>GPS</Text>
@@ -264,16 +283,26 @@ export default function AddLotScreen() {
         </View>
 
         {/* Content */}
-        <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={s.container}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <FormProvider {...methods}>
-            <SectionCard title="Details" subtitle={isEdit ? 'Update lot details' : 'Select trip & fill lot details'}>
+            <SectionCard
+              title="Details"
+              subtitle={
+                isEdit ? 'Update lot details' : 'Select trip & fill lot details'
+              }
+            >
               <DropdownField
-                name="tripId"
                 label="Trip"
                 options={tripOptions}
                 placeholder={loadingTrips ? 'Loading…' : 'Select Trip'}
                 rules={{ required: 'Trip is required' }}
                 disabled={!canEdit}
+                // name={'tripId'}
+                name={'fisherman'}
               />
 
               <TextField
@@ -281,7 +310,7 @@ export default function AddLotScreen() {
                 label="Species"
                 placeholder="e.g., Pomfret"
                 rules={{ required: 'Species is required' }}
-                editable={canEdit}
+                // editable={canEdit}
               />
 
               <NumberField
@@ -289,7 +318,7 @@ export default function AddLotScreen() {
                 label="Weight (kg)"
                 placeholder="0.0"
                 rules={{ required: 'Weight is required' }}
-                editable={canEdit}
+                // editable={canEdit}
               />
               {!weightValid && weightValue?.length > 0 && (
                 <Text style={s.errorText}>Enter a number greater than 0</Text>
@@ -300,15 +329,25 @@ export default function AddLotScreen() {
                 label="Grade"
                 placeholder="A / B / C"
                 rules={{ required: 'Grade is required' }}
-                editable={canEdit}
+                // editable={canEdit}
               />
             </SectionCard>
 
-            <SectionCard title="Location" subtitle="Capture your current coordinates">
-              <LocationCard gps={gps} loading={locLoading} onRecapture={recapture} />
+            <SectionCard
+              title="Location"
+              subtitle="Capture your current coordinates"
+            >
+              <LocationCard
+                gps={gps}
+                loading={locLoading}
+                onRecapture={recapture}
+              />
             </SectionCard>
 
-            <SectionCard title="Photo (optional)" subtitle="Attach a picture of the lot">
+            <SectionCard
+              title="Photo (optional)"
+              subtitle="Attach a picture of the lot"
+            >
               <PhotoCard photoUri={photoUri} onChange={setPhotoUri} />
             </SectionCard>
 
@@ -316,8 +355,15 @@ export default function AddLotScreen() {
               label="Review"
               value={
                 isEdit
-                  ? `Updating ${lotNo} linked to Trip ${selectedTripLabel ?? selectedTripValue ?? '—'}`
-                  : `Lot ${lotNo} will be linked to Trip ${selectedTripLabel ?? selectedTripValue ?? routeTripId ?? '—'}`
+                  ? `Updating ${lotNo} linked to Trip ${
+                      selectedTripLabel ?? selectedTripValue ?? '—'
+                    }`
+                  : `Lot ${lotNo} will be linked to Trip ${
+                      selectedTripLabel ??
+                      selectedTripValue ??
+                      routeTripId ??
+                      '—'
+                    }`
               }
             />
 
