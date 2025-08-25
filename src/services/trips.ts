@@ -517,3 +517,66 @@ export async function listTripsPage(params?: {
 
   return { rows, total, last_page, raw: json };
 }
+
+// src/services/trips.ts (add near the bottom, alongside listTripsPage)
+
+/** Lightweight row shape for list screens */
+export type TripListRow = {
+  id: number | string;
+  trip_name: string; // falls back to trip_id or "Trip {id}"
+  status: TripStatus;
+  departure_port: string | null;
+  destination_port: string | null; // arrival_port -> destination_port fallback
+  departure_time: string | null;   // "YYYY-MM-DD hh:mm AM/PM"
+};
+
+export type LoadTripRowsParams = {
+  page?: number;
+  per_page?: number;
+  status?: TripStatus;
+  search?: string;
+  signal?: AbortSignal;
+};
+
+export async function loadTripRows(params?: LoadTripRowsParams): Promise<{
+  rows: TripListRow[];
+  total: number;
+  last_page: number;
+}> {
+  const page = params?.page ?? 1;
+  const per_page = params?.per_page ?? 25;
+
+  const res = await api('/trips', {
+    query: {
+      page,
+      per_page,
+      status: params?.status,
+      search: params?.search,
+    },
+    signal: params?.signal,
+  });
+
+  // Accept { data: { data: [...] }} or { data: [...] }
+  const arr: any[] = Array.isArray(res?.data?.data)
+    ? res.data.data
+    : Array.isArray(res?.data)
+    ? res.data
+    : [];
+
+  const rows: TripListRow[] = arr.map((t: any) => ({
+    id: t?.id ?? t?.trip_id,
+    trip_name: t?.trip_name ?? t?.trip_id ?? `Trip ${t?.id ?? ''}`,
+    status: (t?.status ?? 'pending') as TripStatus,
+    departure_port: t?.departure_port ?? t?.port_location ?? null,
+    destination_port: t?.arrival_port ?? t?.destination_port ?? null,
+    departure_time: toDisplay12h(t?.departure_time),
+  }));
+
+  // Optional: newest-first by id (tweak as needed)
+  rows.sort((a, b) => Number(b.id) - Number(a.id));
+
+  const total = Number(res?.data?.total ?? rows.length);
+  const last_page = Number(res?.data?.last_page ?? 1);
+
+  return { rows, total, last_page };
+}
