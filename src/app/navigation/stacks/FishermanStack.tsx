@@ -31,18 +31,31 @@ export type FishermanStackParamList = {
   LotsList: undefined;
   LotDetails: { id: number | string };
 
-  FishingActivity:
-    | {
-        tripId: number | string; // UI trip code OR numeric; we’ll choose numeric later
-        activityNo?: number;
-        meta?: {
-          id: number | string; // DB PK (8) -> for API
-          captain?: string | null;
-          boat?: string | null;
-          trip_id?: string | number; // display code
-        };
-      }
-    | { mode: 'edit'; lotId: number | string };
+  // FishingActivity:
+  //   | {
+  //       tripId: number | string; // UI trip code OR numeric; we’ll choose numeric later
+  //       activityNo?: number;
+  //       meta?: {
+  //         id: number | string; // DB PK (8) -> for API
+  //         captain?: string | null;
+  //         boat?: string | null;
+  //         trip_id?: string | number; // display code
+  //       };
+  //     }
+  //   | { mode: 'edit'; lotId: number | string };
+    FishingActivity: {
+    mode?: 'create' | 'edit';
+    activityId?: number | string;
+    tripId: string | number;      // pretty trip code for display
+    activityNo?: number;
+    meta?: {
+      id: number | string;        // trip DB id
+      captain?: string | null;
+      boat?: string | null;
+      trip_id?: string | number;  // pretty code for display
+    };
+    prefill?: any; // optional fast prefill if caller passes known activity fields
+  };
   FishingActivities: undefined; // NEW list screen
   FishingActivityEdit: { id: number | string };
   FishingActivityDetails: {

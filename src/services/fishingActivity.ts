@@ -3,14 +3,14 @@ import { api } from './https';
 
 export type CreateFishingActivityBody = {
   trip_id: number | string;
-  activity_number: number;            // 1..20
-  time_of_netting: string | null;     // "HH:mm" 24h or null
-  time_of_hauling: string | null;     // "HH:mm" 24h or null
-  mesh_size: 1|2|3|4|5|6|7|8 | null;
-  net_length: number | null;          // meters
-  net_width: number | null;           // meters
-  gps_latitude: number;               // -90..90
-  gps_longitude: number;              // -180..180
+  activity_number: number; // 1..20
+  time_of_netting: string | null; // "HH:mm" 24h or null
+  time_of_hauling: string | null; // "HH:mm" 24h or null
+  mesh_size: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | null;
+  net_length: number | null; // meters
+  net_width: number | null; // meters
+  gps_latitude: number; // -90..90
+  gps_longitude: number; // -180..180
 };
 
 export async function createFishingActivity(body: CreateFishingActivityBody) {
@@ -20,8 +20,16 @@ export async function createFishingActivity(body: CreateFishingActivityBody) {
   // backend usually returns { success, message, data } — unwrap as you prefer:
   return json?.data ?? json;
 }
-
-
+export async function updateFishingActivity(
+  id: number | string,
+  body: Partial<CreateFishingActivityBody> & { trip_code?: string | number },
+) {
+  const json = await api(`/fishing-activities/${id}`, {
+    method: 'PUT', // use 'PUT' if your backend expects full replacement
+    body,
+  });
+  return json?.data ?? json;
+}
 
 export type ActivityListParams = {
   page?: number;
@@ -40,17 +48,16 @@ export type PaginatedActivities = {
   };
 };
 
-
 // If you need edit/update later:
-export async function updateFishingActivity(id: number | string, body: Partial<FishingActivity>) {
-  const json = await api(`/fishing-activities/${id}`, { method: 'PUT', body });
-  return json?.data ?? json;
-}
+// export async function updateFishingActivity(id: number | string, body: Partial<FishingActivity>) {
+//   const json = await api(`/fishing-activities/${id}`, { method: 'PUT', body });
+//   return json?.data ?? json;
+// }
 
 export type FishingActivity = {
   id: number | string;
   trip_id: number | string;
-  trip_code?: string | null;     // e.g. "TRIP-20250825-008"
+  trip_code?: string | null; // e.g. "TRIP-20250825-008"
   fisherman_id?: number | string;
   activity_number: number;
   activity_time?: string | null; // ISO
@@ -73,29 +80,45 @@ export type ListFAParams = {
 };
 
 export async function listFishingActivities(params: ListFAParams = {}) {
-  const json = await api('/fishing-activities/all/activities', { method: 'GET', query: params });
+  const json = await api('/fishing-activities/all/activities', {
+    method: 'GET',
+    query: params,
+  });
 
   // server may return {success, data: {data:[], ...}} or {data:[], ...}
   const envelope = json?.data ?? json;
-  const dataArr: any[] = Array.isArray(envelope?.data) ? envelope.data
-                    : Array.isArray(envelope?.data?.data) ? envelope.data.data
-                    : Array.isArray(envelope) ? envelope
-                    : [];
+  const dataArr: any[] = Array.isArray(envelope?.data)
+    ? envelope.data
+    : Array.isArray(envelope?.data?.data)
+    ? envelope.data.data
+    : Array.isArray(envelope)
+    ? envelope
+    : [];
 
   return {
     items: dataArr as FishingActivity[],
     meta: {
-      current_page: Number(envelope?.current_page ?? envelope?.data?.current_page ?? 1),
-      per_page:     Number(envelope?.per_page ?? envelope?.data?.per_page ?? (dataArr?.length || 15)),
+      current_page: Number(
+        envelope?.current_page ?? envelope?.data?.current_page ?? 1,
+      ),
+      per_page: Number(
+        envelope?.per_page ??
+          envelope?.data?.per_page ??
+          (dataArr?.length || 15),
+      ),
       // NOTE: wrap (||) when mixing with (??)
-      total:        Number(envelope?.total ?? envelope?.data?.total ?? (dataArr?.length || 0)),
-      last_page:    Number(envelope?.last_page ?? envelope?.data?.last_page ?? 1),
+      total: Number(
+        envelope?.total ?? envelope?.data?.total ?? (dataArr?.length || 0),
+      ),
+      last_page: Number(envelope?.last_page ?? envelope?.data?.last_page ?? 1),
     },
   };
 }
 
 export async function completeFishingActivity(id: number | string) {
-  const json = await api(`/fishing-activities/${id}/complete`, { method: 'POST' });
+  const json = await api(`/fishing-activities/${id}/complete`, {
+    method: 'POST',
+  });
   return json?.data ?? json;
 }
 /** Raw server payload */
@@ -141,16 +164,16 @@ type TripEmbedded = {
 export type ServerFishingActivityDTO = {
   id: number | string;
   activity_id: string;
-  trip_id: number | string;           // numeric PK
+  trip_id: number | string; // numeric PK
   fisherman_id: number | string;
 
   activity_number: number | null;
-  activity_date: string | null;       // ISO
-  activity_time: string | null;       // ISO
+  activity_date: string | null; // ISO
+  activity_time: string | null; // ISO
   gps_latitude: string | null;
   gps_longitude: string | null;
-  time_of_netting: string | null;     // ISO
-  time_of_hauling: string | null;     // ISO
+  time_of_netting: string | null; // ISO
+  time_of_hauling: string | null; // ISO
 
   gear_type: string | null;
   mesh_size: string | null;
@@ -180,7 +203,7 @@ export type FishSpeciesItem = {
   fisherman_id?: number | string;
 
   species_name?: string | null;
-  quantity_kg?: number | null;        // parsed to number
+  quantity_kg?: number | null; // parsed to number
   type?: 'catch' | 'discard' | string | null;
   type_label?: string | null;
 
@@ -198,8 +221,8 @@ export type FishingActivityDetails = {
   activity_id: string;
 
   /** Trip identifiers */
-  trip_pk: number | string;           // numeric PK for navigation
-  trip_id: string | null;             // pretty code from nested trip
+  trip_pk: number | string; // numeric PK for navigation
+  trip_id: string | null; // pretty code from nested trip
 
   /** Fishermen */
   fisherman_id: number | string;
@@ -286,28 +309,32 @@ function adapt(dto: ServerFishingActivityDTO): FishingActivityDetails {
 
     // species rows → parsed/normalized
     fish_species:
-      dto.fish_species?.map((s): FishSpeciesItem => ({
-        id: s.id,
-        lot_no: s.lot_no ?? null,
-        fishing_activity_id: s.fishing_activity_id,
-        trip_id: s.trip_id,
-        fisherman_id: s.fisherman_id,
+      dto.fish_species?.map(
+        (s): FishSpeciesItem => ({
+          id: s.id,
+          lot_no: s.lot_no ?? null,
+          fishing_activity_id: s.fishing_activity_id,
+          trip_id: s.trip_id,
+          fisherman_id: s.fisherman_id,
 
-        species_name: s.species_name ?? null,
-        quantity_kg:
-          s.quantity_kg !== undefined && s.quantity_kg !== null && s.quantity_kg !== ''
-            ? Number(s.quantity_kg)
-            : null,
-        type: s.type ?? null,
-        type_label: s.type_label ?? null,
+          species_name: s.species_name ?? null,
+          quantity_kg:
+            s.quantity_kg !== undefined &&
+            s.quantity_kg !== null &&
+            s.quantity_kg !== ''
+              ? Number(s.quantity_kg)
+              : null,
+          type: s.type ?? null,
+          type_label: s.type_label ?? null,
 
-        grade: s.grade ?? null,
-        grade_label: s.grade_label ?? null,
-        notes: s.notes ?? null,
+          grade: s.grade ?? null,
+          grade_label: s.grade_label ?? null,
+          notes: s.notes ?? null,
 
-        created_at: s.created_at ?? null,
-        updated_at: s.updated_at ?? null,
-      })) ?? [],
+          created_at: s.created_at ?? null,
+          updated_at: s.updated_at ?? null,
+        }),
+      ) ?? [],
   };
 }
 

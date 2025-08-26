@@ -624,6 +624,10 @@ export async function completeTrip(id: ID, body: CompleteTripPayload) {
   const json = await api(`/trips/${id}/complete`, { method: 'POST', body });
   return (json?.data ?? json) as Trip;
 }
+export async function completedTrip(id: ID, body: CompleteTripPayload) {
+  const json = await api(`/trips/${id}/complete-trip`, { method: 'POST', body });
+  return (json?.data ?? json) as Trip;
+}
 export async function approveTrip(id: ID) {
   const json = await api(`/trips/${id}/approve`, { method: 'POST' });
   return unwrap<Trip>(json);
@@ -751,4 +755,52 @@ export async function loadTripRows(params?: LoadTripRowsParams) {
   const total = Number(res?.data?.total ?? rows.length);
   const last_page = Number(res?.data?.last_page ?? 1);
   return { rows, total, last_page };
+}
+
+
+// --- Trip Completion Data (for Complete modal) ---
+export type MiddleManBrief = {
+  id: number | string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  business_address?: string | null;
+  city?: string | null;
+  verification_status?: string | null;
+  is_verified?: boolean;
+};
+
+export type LotBrief = {
+  id: number | string;
+  lot_no: string;
+  species_name?: string | null;
+  quantity_kg?: number | string | null;
+  activity_no?: string | null;
+  catch_type?: string | null;
+  grade?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+};
+
+export type TripCompletionMeta = {
+  trip: {
+    id: number;
+    trip_id: string;
+    captain_name: string | null;
+    boat_registration_number: string | null;
+    departure_site: string | null;      // e.g. 'karachi_fish_harbor'
+    departure_date: string | null;
+    status: string;
+    fisherman_name: string | null;
+  };
+  lots: LotBrief[];
+  middle_men: MiddleManBrief[];
+  landing_sites: Record<string, string>; // { karachi_fish_harbor: 'Karachi Fish Harbor', ... }
+  total_lots: number;
+  total_middle_men: number;
+};
+
+export async function getTripCompletionData(id: ID) {
+  const json = await api(`/trips/${id}/completion-data`, { method: 'GET' });
+  return unwrap<TripCompletionMeta>(json);
 }

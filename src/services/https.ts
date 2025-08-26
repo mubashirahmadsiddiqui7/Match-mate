@@ -1,8 +1,8 @@
 // src/services/http.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
-const BASE_URL = 'http://192.168.18.44:8000/api'; 
+const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
+// const BASE_URL = 'http://192.168.18.44:8000/api'; 
 const DEBUG = __DEV__; // only log in dev builds
 
 let authToken: string | null = null;

@@ -21,6 +21,13 @@ import {
 } from '../../../services/fishingActivity';
 import PALETTE from '../../../theme/palette';
 import Toast from 'react-native-toast-message';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
+
+type Nav = NativeStackNavigationProp<
+  FishermanStackParamList,
+  'FishingActivityDetails'
+>;
 
 type Params = {
   activityId: number | string;
@@ -63,17 +70,20 @@ function n(v?: any) {
 }
 
 export default function FishingActivityDetailsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const { params } = useRoute<any>();
   const { activityId, fallback, tripId }: Params = params || {};
   const [completing, setCompleting] = useState(false);
 
-  //   const { width } = useWindowDimensions();
-  //   const wide = width >= 720;
-
   const [data, setData] = useState<FishingActivityDetails | null>(
     fallback ?? null,
   );
+  // consider both 'completed' and 'complete', and also label text
+  const isCompleted =
+    (data?.status && String(data.status).toLowerCase() === 'completed') ||
+    (data?.status && String(data.status).toLowerCase() === 'complete') ||
+    (data?.status_label &&
+      String(data.status_label).toLowerCase() === 'completed');
 
   const handleComplete = useCallback(async () => {
     if (!data?.id) return;
@@ -252,7 +262,9 @@ export default function FishingActivityDetailsScreen() {
           </Section>
 
           {/* Bottom actions (wrap on small screens) */}
-          <View style={styles.actionsWrap}>
+          {/* Bottom actions (wrap on small screens) */}
+          <View className="actionsWrap" style={styles.actionsWrap}>
+            {/* Always show Back */}
             <Pressable
               style={[styles.hollowBtn, styles.actionBtn]}
               onPress={() => navigation.goBack()}
@@ -260,58 +272,88 @@ export default function FishingActivityDetailsScreen() {
               <Text style={styles.hollowBtnText}>Back to List</Text>
             </Pressable>
 
-            <Pressable
-              style={[
-                styles.primaryBtn,
-                styles.actionBtn,
-                { backgroundColor: PALETTE.info },
-              ]}
-              onPress={() => Alert.alert('Edit', 'Coming soon')}
-            >
-              <MaterialIcons name="edit" size={18} color="#fff" />
-              <Text style={styles.primaryBtnText}>Edit Activity</Text>
-            </Pressable>
+            {/* Hide these when completed */}
+            {!isCompleted && (
+              <>
+                {/* <Pressable
+                  disabled={!data?.id} // disable if we don't have the activity id yet
+                  style={[
+                    styles.primaryBtn,
+                    styles.actionBtn,
+                    { backgroundColor: PALETTE.info },
+                    !data?.id && { opacity: 0.6 },
+                  ]}
+                  onPress={() =>
+                    navigation.navigate('FishingActivity', {
+                      mode: 'edit',
+                      activityId: data!.id, // activity DB id
+                      tripId: String(data?.trip_id ?? ''), // pretty code (required by your type)
+                      meta: {
+                        id: data?.trip_pk ?? String(data?.trip_id ?? ''), // trip DB pk (fallback to trip code)
+                        captain: (data as any)?.captain_name ?? null,
+                        boat: (data as any)?.boat_registration_number ?? null,
+                        trip_id: String(data?.trip_id ?? ''), // pretty code for display
+                      },
+                      // prefill: data, // optional: pass along to speed up initial render
+                    })
+                  }
+                >
+                  <MaterialIcons name="edit" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Edit Activity</Text>
+                </Pressable> */}
 
-            <Pressable
-              disabled={completing}
-              onPress={handleComplete}
-              style={[
-                styles.primaryBtn,
-                styles.actionBtn,
-                { backgroundColor: PRIMARY },
-                completing && { opacity: 0.7 },
-              ]}
-            >
-              {completing ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <MaterialIcons name="check-circle" size={18} color="#fff" />
-                  <Text style={styles.primaryBtnText}>Complete Activity</Text>
-                </>
-              )}
-            </Pressable>
+                <Pressable
+                  disabled={completing}
+                  onPress={handleComplete}
+                  style={[
+                    styles.primaryBtn,
+                    styles.actionBtn,
+                    { backgroundColor: PRIMARY },
+                    completing && { opacity: 0.7 },
+                  ]}
+                >
+                  {completing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <MaterialIcons
+                        name="check-circle"
+                        size={18}
+                        color="#fff"
+                      />
+                      <Text style={styles.primaryBtnText}>
+                        Complete Activity
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
 
-            <Pressable
-              style={[
-                styles.primaryBtn,
-                styles.actionBtn,
-                { backgroundColor: PALETTE.info },
-              ]}
-              onPress={() =>
-                // @ts-ignore
-                navigation.navigate('RecordFishSpecies', {
-                  activityId: data?.id,
-                  activityCode: data?.activity_id,
-                  tripCode: data?.trip_id,
-                  activityNumber: data?.activity_number ?? null,
-                  date: data?.activity_time ?? data?.activity_date ?? null,
-                })
-              }
-            >
-              <MaterialIcons name="add-circle-outline" size={18} color="#fff" />
-              <Text style={styles.primaryBtnText}>Add Fish Species</Text>
-            </Pressable>
+                <Pressable
+                  style={[
+                    styles.primaryBtn,
+                    styles.actionBtn,
+                    { backgroundColor: PALETTE.info },
+                  ]}
+                  onPress={() =>
+                    // @ts-ignore
+                    navigation.navigate('RecordFishSpecies', {
+                      activityId: data?.id,
+                      activityCode: data?.activity_id,
+                      tripCode: data?.trip_id,
+                      activityNumber: data?.activity_number ?? null,
+                      date: data?.activity_time ?? data?.activity_date ?? null,
+                    })
+                  }
+                >
+                  <MaterialIcons
+                    name="add-circle-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.primaryBtnText}>Add Fish Species</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </ScrollView>
       )}

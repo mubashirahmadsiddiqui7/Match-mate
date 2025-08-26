@@ -1,6 +1,6 @@
 /* eslint-disable react-native/no-inline-styles */
 // src/screens/Fisherman/AddTrip/FishingActivity.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -12,36 +12,32 @@ import {
   View,
   Alert,
 } from 'react-native';
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
+import Toast from 'react-native-toast-message';
 
 import { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
 import {
   createFishingActivity,
+  updateFishingActivity,
+  getFishingActivityById,
   type CreateFishingActivityBody,
 } from '../../../services/fishingActivity';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import Toast from 'react-native-toast-message';
 
-type Nav = NativeStackNavigationProp<
-  FishermanStackParamList,
-  'FishingActivity'
->;
+type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishingActivity'>;
 type R = RouteProp<FishermanStackParamList, 'FishingActivity'>;
 
 type ActivityMeta = {
-  id: number | string; // DB primary key (use for API)
+  id: number | string; // trip DB id
   captain?: string | null;
   boat?: string | null;
-  trip_id?: string | number; // human-readable trip code for display
+  trip_id?: string | number; // pretty code for display
 };
 
 const MESH_INCHES = [1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -62,30 +58,35 @@ function fmt24h(d: Date | null): string | null {
   return `${hh}:${mm}`;
 }
 
+function parseHHMM(t?: string | null): Date | null {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(n => Number(n));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
 export default function FishingActivity() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
 
-  // ----- read params (tripId is the pretty code you navigated with) -----
   const {
-    tripId: tripIdParam, // e.g. "TRIP-20250825-008"
+    mode = 'create',
+    activityId,
+    tripId: tripIdParam,
     activityNo: activityNoParam,
     meta,
-  } = route.params as {
-    tripId: string | number;
-    activityNo?: number;
-    meta?: ActivityMeta;
-  };
+    prefill,
+  } = route.params ?? {};
 
-  // What to display vs. what to POST
   const displayTripCode = String(meta?.trip_id ?? tripIdParam ?? '');
-  const tripPkForApi = meta?.id; // e.g. 8 (required by exists:trips,id)
-
+  const tripPkForApi = meta?.id;
   const initialActivity = activityNoParam ?? 1;
 
   const { gps, loading: gpsLoading, recapture } = useCurrentLocation();
 
-  const { watch, setValue, getValues } = useForm<FormValues>({
+  const { watch, setValue, getValues, reset } = useForm<FormValues>({
     mode: 'onTouched',
     defaultValues: {
       activityNo: initialActivity,
@@ -97,23 +98,78 @@ export default function FishingActivity() {
     },
   });
 
+  const existingGpsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  const [loadingExisting, setLoadingExisting] = useState<boolean>(mode === 'edit');
+
+  // ---- Prefill for EDIT ----
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadExisting() {
+      try {
+        setLoadingExisting(true);
+
+        // show instantaneous prefill if caller passed it
+        if (prefill && typeof prefill === 'object') {
+          safeApplyPrefill(prefill);
+        }
+
+        if (activityId != null) {
+          const a = await getFishingActivityById(activityId);
+          if (!cancelled) safeApplyPrefill(a);
+        }
+      } catch (e: any) {
+        if (!cancelled) Alert.alert('Failed', e?.message || 'Unable to load activity.');
+      } finally {
+        if (!cancelled) setLoadingExisting(false);
+      }
+    }
+
+    if (mode === 'edit') loadExisting();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, activityId]);
+
+  function safeApplyPrefill(a: any) {
+    // These keys should exist on your adapted DTO (adjust if your adapter names differ)
+    const activity_number = Number(a?.activity_number ?? a?.activityNo ?? initialActivity) || initialActivity;
+    const mesh_size = a?.mesh_size ?? a?.mesh;
+    const net_length = a?.net_length ?? a?.netLen;
+    const net_width = a?.net_width ?? a?.netWid;
+    const time_of_netting = a?.time_of_netting ?? a?.netting;
+    const time_of_hauling = a?.time_of_hauling ?? a?.hauling;
+
+    reset({
+      activityNo: activity_number,
+      mesh: (mesh_size as any) ?? null,
+      netLen: net_length != null ? String(net_length) : '',
+      netWid: net_width != null ? String(net_width) : '',
+      netting: parseHHMM(String(time_of_netting ?? '')),
+      hauling: parseHHMM(String(time_of_hauling ?? '')),
+    });
+
+    const lat = a?.gps_latitude ?? a?.lat ?? null;
+    const lng = a?.gps_longitude ?? a?.lng ?? null;
+    existingGpsRef.current = {
+      lat: lat != null ? Number(lat) : null,
+      lng: lng != null ? Number(lng) : null,
+    };
+  }
+
   const [submitting, setSubmitting] = useState(false);
   const [showNetting, setShowNetting] = useState(false);
   const [showHauling, setShowHauling] = useState(false);
 
-  const header = useMemo(() => `Create Fishing Activity`, []);
+  const header = useMemo(
+    () => (mode === 'edit' ? 'Edit Fishing Activity' : 'Create Fishing Activity'),
+    [mode],
+  );
 
-  function onPickTime(
-    kind: 'netting' | 'hauling',
-    e: DateTimePickerEvent,
-    d?: Date,
-  ) {
+  function onPickTime(kind: 'netting' | 'hauling', e: DateTimePickerEvent, d?: Date) {
     if (Platform.OS === 'android') {
-      setTimeout(
-        () =>
-          kind === 'netting' ? setShowNetting(false) : setShowHauling(false),
-        0,
-      );
+      setTimeout(() => (kind === 'netting' ? setShowNetting(false) : setShowHauling(false)), 0);
     }
     if (e.type === 'dismissed') return;
     setValue(kind, d ?? null, { shouldDirty: true, shouldTouch: true });
@@ -122,68 +178,16 @@ export default function FishingActivity() {
   function validate(): string | null {
     if (tripPkForApi == null || tripPkForApi === '') return 'Trip is missing.';
     const aNo = Number(getValues('activityNo'));
-    if (!Number.isInteger(aNo) || aNo < 1 || aNo > 20)
-      return 'Activity Number must be between 1 and 20.';
-    if (!gps) return 'Please enable GPS and wait for coordinates.';
+    if (!Number.isInteger(aNo) || aNo < 1 || aNo > 20) return 'Activity Number must be between 1 and 20.';
     if (!getValues('netting')) return 'Please set Netting Time.';
     if (!getValues('hauling')) return 'Please set Hauling Time.';
+
+    // GPS: allow saved coordinates in edit mode
+    const hasNewGps = !!gps;
+    const hasOldGps = !!existingGpsRef.current.lat && !!existingGpsRef.current.lng;
+    if (!hasNewGps && !hasOldGps) return 'Please enable GPS and wait for coordinates.';
     return null;
   }
-
-  // async function onSubmit(saveAndNext = false) {
-  //   const err = validate();
-  //   if (err) {
-  //     Alert.alert('Missing info', err);
-  //     return;
-  //   }
-
-  //   try {
-  //     setSubmitting(true);
-
-  //     // --- SEND BOTH: DB id (trip_id) + human code (trip_code) ---
-  //     // trip_id -> required numeric/string id for exists:trips,id
-  //     // trip_code -> the pretty string like "TRIP-20250825-008" (extra, optional)
-  //     const body: CreateFishingActivityBody & { trip_code?: string | number } =
-  //       {
-  //         trip_id:
-  //           typeof tripPkForApi === 'string'
-  //             ? Number(tripPkForApi) || tripPkForApi
-  //             : tripPkForApi,
-  //         trip_code: displayTripCode, // <--- include the human code too
-  //         activity_number: Number(getValues('activityNo')),
-  //         time_of_netting: fmt24h(getValues('netting')),
-  //         time_of_hauling: fmt24h(getValues('hauling')),
-  //         mesh_size: (getValues('mesh') as any) ?? null,
-  //         net_length: getValues('netLen') ? Number(getValues('netLen')) : null,
-  //         net_width: getValues('netWid') ? Number(getValues('netWid')) : null,
-  //         gps_latitude: Number(gps!.lat),
-  //         gps_longitude: Number(gps!.lng),
-  //       };
-
-  //     await createFishingActivity(body as any);
-  //     Toast.show({
-  //       type: 'success',
-  //       text1: 'Saved 🎉',
-  //       text2: 'Fishing activity recorded successfully.',
-  //       position: 'top', // or 'top'
-  //       visibilityTime: 3000,
-  //     });
-  //     if (saveAndNext) {
-  //       navigation.replace('FishingActivity', {
-  //         tripId: displayTripCode, // keep showing the pretty code
-  //         activityNo: Number(getValues('activityNo')) + 1,
-  //         meta, // keep passing meta so API keeps working
-  //       });
-  //     }
-  //   } catch (e: any) {
-  //     Alert.alert('Failed', e?.message || 'Unable to create fishing activity.');
-  //   } finally {
-  //     setSubmitting(false);
-  //   }
-  // }
-
-  // BEFORE: async function onSubmit(saveAndNext = false) { ... }
-  // AFTER:   no saveAndNext flag; always go to details page.
 
   async function onSubmit() {
     const err = validate();
@@ -195,45 +199,54 @@ export default function FishingActivity() {
     try {
       setSubmitting(true);
 
-      const body: CreateFishingActivityBody & { trip_code?: string | number } =
-        {
-          trip_id:
-            typeof tripPkForApi === 'string'
-              ? Number(tripPkForApi) || tripPkForApi
-              : tripPkForApi,
-          trip_code: displayTripCode,
-          activity_number: Number(getValues('activityNo')),
-          time_of_netting: fmt24h(getValues('netting')),
-          time_of_hauling: fmt24h(getValues('hauling')),
-          mesh_size: (getValues('mesh') as any) ?? null,
-          net_length: getValues('netLen') ? Number(getValues('netLen')) : null,
-          net_width: getValues('netWid') ? Number(getValues('netWid')) : null,
-          gps_latitude: Number(gps!.lat),
-          gps_longitude: Number(gps!.lng),
-        };
+      const lat = gps?.lat ?? existingGpsRef.current.lat ?? null;
+      const lng = gps?.lng ?? existingGpsRef.current.lng ?? null;
 
-      const created = await createFishingActivity(body as any);
-      Toast.show({
-        type: 'success',
-        text1: 'Saved 🎉',
-        text2: 'Fishing activity recorded successfully.',
-        position: 'top',
-        visibilityTime: 2500,
-      });
+      const body: CreateFishingActivityBody & { trip_code?: string | number } = {
+        trip_id: typeof tripPkForApi === 'string' ? Number(tripPkForApi) || tripPkForApi : tripPkForApi,
+        trip_code: displayTripCode,
+        activity_number: Number(getValues('activityNo')),
+        time_of_netting: fmt24h(getValues('netting')),
+        time_of_hauling: fmt24h(getValues('hauling')),
+        mesh_size: (getValues('mesh') as any) ?? null,
+        net_length: getValues('netLen') ? Number(getValues('netLen')) : null,
+        net_width: getValues('netWid') ? Number(getValues('netWid')) : null,
+        gps_latitude: lat != null ? Number(lat) : null,
+        gps_longitude: lng != null ? Number(lng) : null,
+      };
 
-      // pull new activity id safely from typical API shapes
-      const activityId =
-        created?.data?.id ?? created?.id ?? created?.activity?.id;
-
-      // go to the details screen
-      navigation.replace('FishingActivityDetails', {
-        activityId,
-        // pass what you already have (useful for instant render while fetching)
-        fallback: created?.data ?? created,
-        tripId: displayTripCode,
-      });
+      if (mode === 'edit' && activityId != null) {
+        const updated = await updateFishingActivity(activityId, body);
+        Toast.show({
+          type: 'success',
+          text1: 'Updated ✅',
+          text2: 'Fishing activity updated successfully.',
+          position: 'top',
+          visibilityTime: 2500,
+        });
+        navigation.replace('FishingActivityDetails', {
+          activityId,
+          fallback: updated?.data ?? updated,
+          tripId: displayTripCode,
+        });
+      } else {
+        const created = await createFishingActivity(body);
+        Toast.show({
+          type: 'success',
+          text1: 'Saved 🎉',
+          text2: 'Fishing activity recorded successfully.',
+          position: 'top',
+          visibilityTime: 2500,
+        });
+        const newId = created?.data?.id ?? created?.id ?? created?.activity?.id;
+        navigation.replace('FishingActivityDetails', {
+          activityId: newId,
+          fallback: created?.data ?? created,
+          tripId: displayTripCode,
+        });
+      }
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Unable to create fishing activity.');
+      Alert.alert('Failed', e?.message || (mode === 'edit' ? 'Unable to update activity.' : 'Unable to create activity.'));
     } finally {
       setSubmitting(false);
     }
@@ -249,217 +262,186 @@ export default function FishingActivity() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       {/* Top bar */}
       <View style={s.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={s.iconBtn}
-          accessibilityLabel="Back"
-        >
+        <Pressable onPress={() => navigation.goBack()} style={s.iconBtn} accessibilityLabel="Back">
           <MaterialIcons name="arrow-back" size={22} color="#fff" />
         </Pressable>
         <Text style={s.headerTitle}>{header}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
-        {/* Selected Trip */}
-        <View style={[s.card, { backgroundColor: '#E9F5FF' }]}>
-          <Text style={[s.cardTitle, { color: '#0F172A' }]}>
-            Selected Trip Information
-          </Text>
-          <View style={s.rowBetween}>
-            <KV label="Trip ID" value={displayTripCode} />
-            <KV label="Boat " value={meta?.boat ? String(meta.boat) : 'N/A'} />
-            <KV
-              label="Captain"
-              value={meta?.captain ? String(meta.captain) : 'N/A'}
-            />
-            <Badge text="Active" />
-          </View>
-          {!!meta?.id && (
-            <Text style={{ marginTop: 6, fontSize: 11, color: '#64748B' }}>
-              Internal ID: {String(meta.id)}
-            </Text>
-          )}
+      {loadingExisting ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator />
+          <Text style={{ marginTop: 8, color: '#475569' }}>Loading activity…</Text>
         </View>
-
-        {/* Basic Activity */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Basic Activity Information</Text>
-          <View style={s.col}>
-            <Text style={s.label}>Activity Number *</Text>
-            <TextInput
-              value={String(watch('activityNo'))}
-              editable={false}
-              style={[s.input, { backgroundColor: '#F1F5F9' }]}
-            />
-            <Text style={s.hint}>Auto-increment for each new activity.</Text>
-          </View>
-        </View>
-
-        {/* Timing */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Fishing Timing Information</Text>
-
-          <View style={s.duo}>
-            <View style={s.duoItem}>
-              <Text style={s.label}>Netting Time *</Text>
-              <Pressable style={s.input} onPress={() => setShowNetting(true)}>
-                <Text style={s.inputText}>
-                  {netting ? netting.toLocaleTimeString() : 'Select time'}
-                </Text>
-              </Pressable>
-              {showNetting && (
-                <DateTimePicker
-                  value={netting ?? new Date()}
-                  onChange={(e, d) => onPickTime('netting', e, d!)}
-                  mode="time"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  is24Hour={false}
-                />
-              )}
-              <Text style={s.hint}>
-                Time when netting started (24‑hour format sent to server).
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
+          {/* Selected Trip */}
+          <View style={[s.card, { backgroundColor: '#E9F5FF' }]}>
+            <Text style={[s.cardTitle, { color: '#0F172A' }]}>Selected Trip Information</Text>
+            <View style={s.rowBetween}>
+              <KV label="Trip ID" value={displayTripCode} />
+              <KV label="Boat " value={meta?.boat ? String(meta.boat) : 'N/A'} />
+              <KV label="Captain" value={meta?.captain ? String(meta.captain) : 'N/A'} />
+              <Badge text="Active" />
+            </View>
+            {!!meta?.id && (
+              <Text style={{ marginTop: 6, fontSize: 11, color: '#64748B' }}>
+                Internal ID: {String(meta.id)}
               </Text>
-            </View>
-
-            <View style={s.duoItem}>
-              <Text style={s.label}>Hauling Time *</Text>
-              <Pressable style={s.input} onPress={() => setShowHauling(true)}>
-                <Text style={s.inputText}>
-                  {hauling ? hauling.toLocaleTimeString() : 'Select time'}
-                </Text>
-              </Pressable>
-              {showHauling && (
-                <DateTimePicker
-                  value={hauling ?? new Date()}
-                  onChange={(e, d) => onPickTime('hauling', e, d!)}
-                  mode="time"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  is24Hour={false}
-                />
-              )}
-              <Text style={s.hint}>
-                Time when hauling finished (24‑hour format sent to server).
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Net Specs */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Net Specifications</Text>
-
-          <Text style={s.label}>Mesh Size (inches)</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {MESH_INCHES.map(v => {
-              const sel = mesh === v;
-              return (
-                <Pressable
-                  key={v}
-                  onPress={() => setValue('mesh', v)}
-                  style={[
-                    s.pill,
-                    sel && {
-                      backgroundColor: '#14532D',
-                      borderColor: '#14532D',
-                    },
-                  ]}
-                >
-                  <Text style={[s.pillText, sel && { color: '#fff' }]}>
-                    {v}"
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <View style={s.duo}>
-            <View style={s.duoItem}>
-              <Text style={s.label}>Net Length (meters)</Text>
-              <TextInput
-                value={watch('netLen') ?? ''}
-                onChangeText={t =>
-                  setValue('netLen', t.replace(/[^0-9.]/g, ''))
-                }
-                keyboardType="decimal-pad"
-                placeholder="e.g., 100.5"
-                style={s.input}
-              />
-            </View>
-            <View style={s.duoItem}>
-              <Text style={s.label}>Net Width (meters)</Text>
-              <TextInput
-                value={watch('netWid') ?? ''}
-                onChangeText={t =>
-                  setValue('netWid', t.replace(/[^0-9.]/g, ''))
-                }
-                keyboardType="decimal-pad"
-                placeholder="e.g., 8"
-                style={s.input}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Location */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Location Information</Text>
-          <View style={s.duo}>
-            <View style={s.duoItem}>
-              <Text style={s.label}>Latitude *</Text>
-              <TextInput
-                editable={false}
-                value={
-                  gpsLoading
-                    ? 'Locating…'
-                    : gps
-                    ? String(gps.lat.toFixed(6))
-                    : 'Not captured'
-                }
-                style={[s.input, { backgroundColor: '#F1F5F9' }]}
-              />
-            </View>
-            <View style={s.duoItem}>
-              <Text style={s.label}>Longitude *</Text>
-              <TextInput
-                editable={false}
-                value={
-                  gpsLoading
-                    ? 'Locating…'
-                    : gps
-                    ? String(gps.lng.toFixed(6))
-                    : 'Not captured'
-                }
-                style={[s.input, { backgroundColor: '#F1F5F9' }]}
-              />
-            </View>
-          </View>
-
-          <Pressable onPress={recapture} style={s.secondaryBtn}>
-            <Text style={s.secondaryBtnText}>Auto‑fill GPS Coordinates</Text>
-          </Pressable>
-        </View>
-
-        {/* Actions */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <Pressable
-            disabled={submitting || gpsLoading}
-            onPress={onSubmit}
-            style={[
-              s.primaryBtn,
-              (submitting || gpsLoading) && { opacity: 0.7 },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Icon name="save" size={18} color="#fff" />
-                <Text style={s.primaryBtnText}>Create Fishing Activity</Text>
-              </>
             )}
-          </Pressable>
-        </View>
-      </ScrollView>
+          </View>
+
+          {/* Basic Activity */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Basic Activity Information</Text>
+            <View style={s.col}>
+              <Text style={s.label}>Activity Number *</Text>
+              <TextInput value={String(watch('activityNo'))} editable={false} style={[s.input, { backgroundColor: '#F1F5F9' }]} />
+              <Text style={s.hint}>Auto-increment for create. Non-editable here.</Text>
+            </View>
+          </View>
+
+          {/* Timing */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Fishing Timing Information</Text>
+
+            <View style={s.duo}>
+              <View style={s.duoItem}>
+                <Text style={s.label}>Netting Time *</Text>
+                <Pressable style={s.input} onPress={() => setShowNetting(true)}>
+                  <Text style={s.inputText}>{netting ? netting.toLocaleTimeString() : 'Select time'}</Text>
+                </Pressable>
+                {showNetting && (
+                  <DateTimePicker
+                    value={netting ?? new Date()}
+                    onChange={(e, d) => onPickTime('netting', e, d!)}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    is24Hour={false}
+                  />
+                )}
+                <Text style={s.hint}>Time when netting started (24-hour format sent to server).</Text>
+              </View>
+
+              <View style={s.duoItem}>
+                <Text style={s.label}>Hauling Time *</Text>
+                <Pressable style={s.input} onPress={() => setShowHauling(true)}>
+                  <Text style={s.inputText}>{hauling ? hauling.toLocaleTimeString() : 'Select time'}</Text>
+                </Pressable>
+                {showHauling && (
+                  <DateTimePicker
+                    value={hauling ?? new Date()}
+                    onChange={(e, d) => onPickTime('hauling', e, d!)}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    is24Hour={false}
+                  />
+                )}
+                <Text style={s.hint}>Time when hauling finished (24-hour format sent to server).</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Net Specs */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Net Specifications</Text>
+
+            <Text style={s.label}>Mesh Size (inches)</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {MESH_INCHES.map(v => {
+                const sel = mesh === v;
+                return (
+                  <Pressable key={v} onPress={() => setValue('mesh', v)} style={[s.pill, sel && { backgroundColor: '#14532D', borderColor: '#14532D' }]}>
+                    <Text style={[s.pillText, sel && { color: '#fff' }]}>{v}"</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={s.duo}>
+              <View style={s.duoItem}>
+                <Text style={s.label}>Net Length (meters)</Text>
+                <TextInput
+                  value={watch('netLen') ?? ''}
+                  onChangeText={t => setValue('netLen', t.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g., 100.5"
+                  style={s.input}
+                />
+              </View>
+              <View style={s.duoItem}>
+                <Text style={s.label}>Net Width (meters)</Text>
+                <TextInput
+                  value={watch('netWid') ?? ''}
+                  onChangeText={t => setValue('netWid', t.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g., 8"
+                  style={s.input}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Location */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Location Information</Text>
+            <View style={s.duo}>
+              <View style={s.duoItem}>
+                <Text style={s.label}>Latitude *</Text>
+                <TextInput
+                  editable={false}
+                  value={
+                    gpsLoading
+                      ? 'Locating…'
+                      : gps
+                      ? String(gps.lat.toFixed(6))
+                      : existingGpsRef.current.lat != null
+                      ? String(existingGpsRef.current.lat?.toFixed(6))
+                      : 'Not captured'
+                  }
+                  style={[s.input, { backgroundColor: '#F1F5F9' }]}
+                />
+              </View>
+              <View style={s.duoItem}>
+                <Text style={s.label}>Longitude *</Text>
+                <TextInput
+                  editable={false}
+                  value={
+                    gpsLoading
+                      ? 'Locating…'
+                      : gps
+                      ? String(gps.lng.toFixed(6))
+                      : existingGpsRef.current.lng != null
+                      ? String(existingGpsRef.current.lng?.toFixed(6))
+                      : 'Not captured'
+                  }
+                  style={[s.input, { backgroundColor: '#F1F5F9' }]}
+                />
+              </View>
+            </View>
+
+            <Pressable onPress={recapture} style={s.secondaryBtn}>
+              <Text style={s.secondaryBtnText}>
+                {mode === 'edit' ? 'Re-capture GPS (optional)' : 'Auto-fill GPS Coordinates'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Actions */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable disabled={submitting || gpsLoading} onPress={onSubmit} style={[s.primaryBtn, (submitting || gpsLoading) && { opacity: 0.7 }]}>
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons name={mode === 'edit' ? 'save' : 'save'} size={18} color="#fff" />
+                  <Text style={s.primaryBtnText}>{mode === 'edit' ? 'Update Fishing Activity' : 'Create Fishing Activity'}</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -475,17 +457,8 @@ function KV({ label, value }: { label: string; value: string }) {
 }
 function Badge({ text }: { text: string }) {
   return (
-    <View
-      style={{
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 999,
-      }}
-    >
-      <Text style={{ color: '#166534', fontWeight: '700', fontSize: 12 }}>
-        {text}
-      </Text>
+    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+      <Text style={{ color: '#166534', fontWeight: '700', fontSize: 12 }}>{text}</Text>
     </View>
   );
 }
@@ -497,9 +470,11 @@ const s = StyleSheet.create({
     padding: 16,
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   iconBtn: { padding: 8, borderRadius: 999 },
-
   headerTitle: { color: '#fff', fontWeight: '800', fontSize: 18 },
 
   card: {
@@ -562,20 +537,5 @@ const s = StyleSheet.create({
   },
   primaryBtnText: { color: '#fff', fontWeight: '800' },
 
-  hollowBtn: {
-    height: 48,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#1B5E20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hollowBtnText: { color: '#1B5E20', fontWeight: '800' },
-
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });
