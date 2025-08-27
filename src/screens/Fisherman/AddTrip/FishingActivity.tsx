@@ -12,7 +12,9 @@ import {
   View,
   Alert,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -30,7 +32,10 @@ import {
   type CreateFishingActivityBody,
 } from '../../../services/fishingActivity';
 
-type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishingActivity'>;
+type Nav = NativeStackNavigationProp<
+  FishermanStackParamList,
+  'FishingActivity'
+>;
 type R = RouteProp<FishermanStackParamList, 'FishingActivity'>;
 
 type ActivityMeta = {
@@ -98,8 +103,13 @@ export default function FishingActivity() {
     },
   });
 
-  const existingGpsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
-  const [loadingExisting, setLoadingExisting] = useState<boolean>(mode === 'edit');
+  const existingGpsRef = useRef<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null,
+  });
+  const [loadingExisting, setLoadingExisting] = useState<boolean>(
+    mode === 'edit',
+  );
 
   // ---- Prefill for EDIT ----
   useEffect(() => {
@@ -119,7 +129,8 @@ export default function FishingActivity() {
           if (!cancelled) safeApplyPrefill(a);
         }
       } catch (e: any) {
-        if (!cancelled) Alert.alert('Failed', e?.message || 'Unable to load activity.');
+        if (!cancelled)
+          Alert.alert('Failed', e?.message || 'Unable to load activity.');
       } finally {
         if (!cancelled) setLoadingExisting(false);
       }
@@ -134,7 +145,9 @@ export default function FishingActivity() {
 
   function safeApplyPrefill(a: any) {
     // These keys should exist on your adapted DTO (adjust if your adapter names differ)
-    const activity_number = Number(a?.activity_number ?? a?.activityNo ?? initialActivity) || initialActivity;
+    const activity_number =
+      Number(a?.activity_number ?? a?.activityNo ?? initialActivity) ||
+      initialActivity;
     const mesh_size = a?.mesh_size ?? a?.mesh;
     const net_length = a?.net_length ?? a?.netLen;
     const net_width = a?.net_width ?? a?.netWid;
@@ -163,13 +176,22 @@ export default function FishingActivity() {
   const [showHauling, setShowHauling] = useState(false);
 
   const header = useMemo(
-    () => (mode === 'edit' ? 'Edit Fishing Activity' : 'Create Fishing Activity'),
+    () =>
+      mode === 'edit' ? 'Edit Fishing Activity' : 'Create Fishing Activity',
     [mode],
   );
 
-  function onPickTime(kind: 'netting' | 'hauling', e: DateTimePickerEvent, d?: Date) {
+  function onPickTime(
+    kind: 'netting' | 'hauling',
+    e: DateTimePickerEvent,
+    d?: Date,
+  ) {
     if (Platform.OS === 'android') {
-      setTimeout(() => (kind === 'netting' ? setShowNetting(false) : setShowHauling(false)), 0);
+      setTimeout(
+        () =>
+          kind === 'netting' ? setShowNetting(false) : setShowHauling(false),
+        0,
+      );
     }
     if (e.type === 'dismissed') return;
     setValue(kind, d ?? null, { shouldDirty: true, shouldTouch: true });
@@ -178,14 +200,17 @@ export default function FishingActivity() {
   function validate(): string | null {
     if (tripPkForApi == null || tripPkForApi === '') return 'Trip is missing.';
     const aNo = Number(getValues('activityNo'));
-    if (!Number.isInteger(aNo) || aNo < 1 || aNo > 20) return 'Activity Number must be between 1 and 20.';
+    if (!Number.isInteger(aNo) || aNo < 1 || aNo > 20)
+      return 'Activity Number must be between 1 and 20.';
     if (!getValues('netting')) return 'Please set Netting Time.';
     if (!getValues('hauling')) return 'Please set Hauling Time.';
 
     // GPS: allow saved coordinates in edit mode
     const hasNewGps = !!gps;
-    const hasOldGps = !!existingGpsRef.current.lat && !!existingGpsRef.current.lng;
-    if (!hasNewGps && !hasOldGps) return 'Please enable GPS and wait for coordinates.';
+    const hasOldGps =
+      !!existingGpsRef.current.lat && !!existingGpsRef.current.lng;
+    if (!hasNewGps && !hasOldGps)
+      return 'Please enable GPS and wait for coordinates.';
     return null;
   }
 
@@ -202,18 +227,22 @@ export default function FishingActivity() {
       const lat = gps?.lat ?? existingGpsRef.current.lat ?? null;
       const lng = gps?.lng ?? existingGpsRef.current.lng ?? null;
 
-      const body: CreateFishingActivityBody & { trip_code?: string | number } = {
-        trip_id: typeof tripPkForApi === 'string' ? Number(tripPkForApi) || tripPkForApi : tripPkForApi,
-        trip_code: displayTripCode,
-        activity_number: Number(getValues('activityNo')),
-        time_of_netting: fmt24h(getValues('netting')),
-        time_of_hauling: fmt24h(getValues('hauling')),
-        mesh_size: (getValues('mesh') as any) ?? null,
-        net_length: getValues('netLen') ? Number(getValues('netLen')) : null,
-        net_width: getValues('netWid') ? Number(getValues('netWid')) : null,
-        gps_latitude: lat != null ? Number(lat) : null,
-        gps_longitude: lng != null ? Number(lng) : null,
-      };
+      const body: CreateFishingActivityBody & { trip_code?: string | number } =
+        {
+          trip_id:
+            typeof tripPkForApi === 'string'
+              ? Number(tripPkForApi) || tripPkForApi
+              : tripPkForApi,
+          trip_code: displayTripCode,
+          activity_number: Number(getValues('activityNo')),
+          time_of_netting: fmt24h(getValues('netting')),
+          time_of_hauling: fmt24h(getValues('hauling')),
+          mesh_size: (getValues('mesh') as any) ?? null,
+          net_length: getValues('netLen') ? Number(getValues('netLen')) : null,
+          net_width: getValues('netWid') ? Number(getValues('netWid')) : null,
+          gps_latitude: lat != null ? Number(lat) : null,
+          gps_longitude: lng != null ? Number(lng) : null,
+        };
 
       if (mode === 'edit' && activityId != null) {
         const updated = await updateFishingActivity(activityId, body);
@@ -246,7 +275,13 @@ export default function FishingActivity() {
         });
       }
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || (mode === 'edit' ? 'Unable to update activity.' : 'Unable to create activity.'));
+      Alert.alert(
+        'Failed',
+        e?.message ||
+          (mode === 'edit'
+            ? 'Unable to update activity.'
+            : 'Unable to create activity.'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -262,28 +297,48 @@ export default function FishingActivity() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       {/* Top bar */}
       <View style={s.header}>
-        <Pressable onPress={() => navigation.goBack()} style={s.iconBtn} accessibilityLabel="Back">
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={s.iconBtn}
+          accessibilityLabel="Back"
+        >
           <MaterialIcons name="arrow-back" size={22} color="#fff" />
         </Pressable>
         <Text style={s.headerTitle}>{header}</Text>
       </View>
 
       {loadingExisting ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+        >
           <ActivityIndicator />
-          <Text style={{ marginTop: 8, color: '#475569' }}>Loading activity…</Text>
+          <Text style={{ marginTop: 8, color: '#475569' }}>
+            Loading activity…
+          </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
           {/* Selected Trip */}
           <View style={[s.card, { backgroundColor: '#E9F5FF' }]}>
-            <Text style={[s.cardTitle, { color: '#0F172A' }]}>Selected Trip Information</Text>
+            <Text style={[s.cardTitle, { color: '#0F172A' }]}>
+              Selected Trip Information
+            </Text>
             <View style={s.rowBetween}>
               <KV label="Trip ID" value={displayTripCode} />
-              <KV label="Boat " value={meta?.boat ? String(meta.boat) : 'N/A'} />
-              <KV label="Captain" value={meta?.captain ? String(meta.captain) : 'N/A'} />
+              <KV
+                label="Boat "
+                value={meta?.boat ? String(meta.boat) : 'N/A'}
+              />
+              <KV
+                label="Captain"
+                value={meta?.captain ? String(meta.captain) : 'N/A'}
+              />
+            </View>
+            <View>
+              <Text style={{color:"#64748B", alignSelf:'center', fontSize:12, paddingBottom:5}}>Status</Text>
               <Badge text="Active" />
             </View>
+
             {!!meta?.id && (
               <Text style={{ marginTop: 6, fontSize: 11, color: '#64748B' }}>
                 Internal ID: {String(meta.id)}
@@ -296,8 +351,14 @@ export default function FishingActivity() {
             <Text style={s.cardTitle}>Basic Activity Information</Text>
             <View style={s.col}>
               <Text style={s.label}>Activity Number *</Text>
-              <TextInput value={String(watch('activityNo'))} editable={false} style={[s.input, { backgroundColor: '#F1F5F9' }]} />
-              <Text style={s.hint}>Auto-increment for create. Non-editable here.</Text>
+              <TextInput
+                value={String(watch('activityNo'))}
+                editable={false}
+                style={[s.input, { backgroundColor: '#F1F5F9' }]}
+              />
+              <Text style={s.hint}>
+                Auto-increment for create. Non-editable here.
+              </Text>
             </View>
           </View>
 
@@ -309,7 +370,9 @@ export default function FishingActivity() {
               <View style={s.duoItem}>
                 <Text style={s.label}>Netting Time *</Text>
                 <Pressable style={s.input} onPress={() => setShowNetting(true)}>
-                  <Text style={s.inputText}>{netting ? netting.toLocaleTimeString() : 'Select time'}</Text>
+                  <Text style={s.inputText}>
+                    {netting ? netting.toLocaleTimeString() : 'Select time'}
+                  </Text>
                 </Pressable>
                 {showNetting && (
                   <DateTimePicker
@@ -320,13 +383,17 @@ export default function FishingActivity() {
                     is24Hour={false}
                   />
                 )}
-                <Text style={s.hint}>Time when netting started (24-hour format sent to server).</Text>
+                <Text style={s.hint}>
+                  Time when netting started (24-hour format sent to server).
+                </Text>
               </View>
 
               <View style={s.duoItem}>
                 <Text style={s.label}>Hauling Time *</Text>
                 <Pressable style={s.input} onPress={() => setShowHauling(true)}>
-                  <Text style={s.inputText}>{hauling ? hauling.toLocaleTimeString() : 'Select time'}</Text>
+                  <Text style={s.inputText}>
+                    {hauling ? hauling.toLocaleTimeString() : 'Select time'}
+                  </Text>
                 </Pressable>
                 {showHauling && (
                   <DateTimePicker
@@ -337,7 +404,9 @@ export default function FishingActivity() {
                     is24Hour={false}
                   />
                 )}
-                <Text style={s.hint}>Time when hauling finished (24-hour format sent to server).</Text>
+                <Text style={s.hint}>
+                  Time when hauling finished (24-hour format sent to server).
+                </Text>
               </View>
             </View>
           </View>
@@ -351,8 +420,20 @@ export default function FishingActivity() {
               {MESH_INCHES.map(v => {
                 const sel = mesh === v;
                 return (
-                  <Pressable key={v} onPress={() => setValue('mesh', v)} style={[s.pill, sel && { backgroundColor: '#14532D', borderColor: '#14532D' }]}>
-                    <Text style={[s.pillText, sel && { color: '#fff' }]}>{v}"</Text>
+                  <Pressable
+                    key={v}
+                    onPress={() => setValue('mesh', v)}
+                    style={[
+                      s.pill,
+                      sel && {
+                        backgroundColor: '#14532D',
+                        borderColor: '#14532D',
+                      },
+                    ]}
+                  >
+                    <Text style={[s.pillText, sel && { color: '#fff' }]}>
+                      {v}"
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -363,7 +444,9 @@ export default function FishingActivity() {
                 <Text style={s.label}>Net Length (meters)</Text>
                 <TextInput
                   value={watch('netLen') ?? ''}
-                  onChangeText={t => setValue('netLen', t.replace(/[^0-9.]/g, ''))}
+                  onChangeText={t =>
+                    setValue('netLen', t.replace(/[^0-9.]/g, ''))
+                  }
                   keyboardType="decimal-pad"
                   placeholder="e.g., 100.5"
                   style={s.input}
@@ -373,7 +456,9 @@ export default function FishingActivity() {
                 <Text style={s.label}>Net Width (meters)</Text>
                 <TextInput
                   value={watch('netWid') ?? ''}
-                  onChangeText={t => setValue('netWid', t.replace(/[^0-9.]/g, ''))}
+                  onChangeText={t =>
+                    setValue('netWid', t.replace(/[^0-9.]/g, ''))
+                  }
                   keyboardType="decimal-pad"
                   placeholder="e.g., 8"
                   style={s.input}
@@ -422,20 +507,37 @@ export default function FishingActivity() {
 
             <Pressable onPress={recapture} style={s.secondaryBtn}>
               <Text style={s.secondaryBtnText}>
-                {mode === 'edit' ? 'Re-capture GPS (optional)' : 'Auto-fill GPS Coordinates'}
+                {mode === 'edit'
+                  ? 'Re-capture GPS (optional)'
+                  : 'Auto-fill GPS Coordinates'}
               </Text>
             </Pressable>
           </View>
 
           {/* Actions */}
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Pressable disabled={submitting || gpsLoading} onPress={onSubmit} style={[s.primaryBtn, (submitting || gpsLoading) && { opacity: 0.7 }]}>
+            <Pressable
+              disabled={submitting || gpsLoading}
+              onPress={onSubmit}
+              style={[
+                s.primaryBtn,
+                (submitting || gpsLoading) && { opacity: 0.7 },
+              ]}
+            >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <MaterialIcons name={mode === 'edit' ? 'save' : 'save'} size={18} color="#fff" />
-                  <Text style={s.primaryBtnText}>{mode === 'edit' ? 'Update Fishing Activity' : 'Create Fishing Activity'}</Text>
+                  <MaterialIcons
+                    name={mode === 'edit' ? 'save' : 'save'}
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={s.primaryBtnText}>
+                    {mode === 'edit'
+                      ? 'Update Fishing Activity'
+                      : 'Create Fishing Activity'}
+                  </Text>
                 </>
               )}
             </Pressable>
@@ -457,8 +559,19 @@ function KV({ label, value }: { label: string; value: string }) {
 }
 function Badge({ text }: { text: string }) {
   return (
-    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
-      <Text style={{ color: '#166534', fontWeight: '700', fontSize: 12 }}>{text}</Text>
+    <View
+      style={{
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        alignItems: 'center',
+        margin: 'auto',
+      }}
+    >
+      <Text style={{ color: '#166534', fontWeight: '700', fontSize: 15 }}>
+        {text}
+      </Text>
     </View>
   );
 }
@@ -537,5 +650,9 @@ const s = StyleSheet.create({
   },
   primaryBtnText: { color: '#fff', fontWeight: '800' },
 
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 });

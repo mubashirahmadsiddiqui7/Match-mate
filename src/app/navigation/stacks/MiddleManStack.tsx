@@ -3,12 +3,14 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MiddleManHome from '../../../screens/middleman/MiddleManHome';
 import LotDetails from '../../../screens/middleman/lotDetails';
-import ExporterDetails from '../../../screens/middleman/exporterDetails';
+import Distributions from '../../../screens/middleman/Distributions';
+import distributionDetails from '../../../screens/middleman/distributionDetails';
 
 export type MiddleManStackParamList = {
   MiddleManHome: undefined;
   lotDetails: { id: number | string };
-  exporterDetails: { id: number | string };
+  Distributions: { id: number | string };
+  distributionDetails:undefined;
 };
 
 const Stack = createNativeStackNavigator<MiddleManStackParamList>();
@@ -23,9 +25,14 @@ export default function MiddleManStack() {
         options={{ headerShown: true, title: 'Lot Details' }}
       />
       <Stack.Screen
-        name="exporterDetails"
-        component={ExporterDetails}
-        options={{ headerShown: true, title: 'Exporter Details' }}
+        name="Distributions"
+        component={Distributions}
+        options={{ headerShown: true, title: 'Distributions' }}
+      />
+      <Stack.Screen 
+      name="distributionDetails"
+      component={distributionDetails}
+      options={{headerShown:true, title: 'Distribution Details'}}
       />
     </Stack.Navigator>
   );

@@ -99,7 +99,7 @@ export default function MiddleManHome() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Image source={AVATAR} style={styles.avatar} />
-          <View>
+          <View style={{marginLeft:-20}}>
             <Text style={styles.welcome}>Welcome back, Middle!</Text>
             <Text style={styles.subtle}>Marine Fisheries Department Portal</Text>
           </View>
@@ -117,20 +117,20 @@ export default function MiddleManHome() {
       {/* Quick metrics & actions */}
       <View style={styles.metricsRow}>
         <MetricPill label="Account" value="Active" tone="success" />
-        <MetricPill label="Lots" value={`${meta?.total ?? 0}`} />
+        <MetricPill label="Distributions" value={`${meta?.total ?? 0}`} />
         <MetricPill label="Pending" value={estimatePending(filtered)} tone="warn" />
       </View>
 
       <View style={styles.quickRow}>
-        <QuickButton label="New Trip" onPress={() => navigation.navigate('MiddleManHome')} icon="＋" />
-        <QuickButton label="Add Fish Lot" onPress={() => navigation.navigate('MiddleManHome')} icon="⛵" />
-        <QuickButton label="Register Boat" onPress={() => navigation.navigate('MiddleManHome')} icon="🛥" />
+        <QuickButton label="Purchases" onPress={() => navigation.navigate('lotDetails')} icon="$" />
+        <QuickButton label="Distributions" onPress={() => navigation.navigate('Distributions')} icon="🐠" />
+        <QuickButton label="Assignments" onPress={() => navigation.navigate('MiddleManHome')} icon="🏢" />
       </View>
 
       {/* Search */}
       <View style={styles.searchWrap}>
         <TextInput
-          placeholder="Search lots by lot no., species, port…"
+          placeholder="Search by Distribution no., lot no.."
           placeholderTextColor={PALETTE.text600}
           value={query}
           onChangeText={setQuery}
@@ -158,7 +158,7 @@ export default function MiddleManHome() {
           }
           onEndReachedThreshold={0.2}
           onEndReached={onEndReached}
-          ListHeaderComponent={<SectionHeader title="Lots Assigned" />}
+          ListHeaderComponent={<SectionHeader title="Distributions Given" />}
           ListEmptyComponent={<EmptyState onRetry={() => load(1, query, true)} />}
           renderItem={({ item }) => (
             <LotRow
@@ -264,7 +264,7 @@ function KV({ label, value }: { label: string; value: string }) {
 function EmptyState({ onRetry }: { onRetry: () => void }) {
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>No lots to show</Text>
+      <Text style={styles.emptyTitle}>No Distributions to show</Text>
       <Text style={styles.emptySub}>Try adjusting search or pull to refresh.</Text>
       <Pressable onPress={onRetry} style={styles.retryBtn}>
         <Text style={styles.retryText}>Reload</Text>
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 11 },
   welcome: { color: '#fff', fontSize: 18, fontWeight: '700' },
   subtle: { color: '#E6F3E7', fontSize: 12 },
 
