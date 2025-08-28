@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 // src/screens/auth/Login.tsx
 import React, { useState } from 'react';
 import {
@@ -91,9 +92,7 @@ const Login = () => {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
           style={styles.full}
         >
-          {/* Whole page, no scroll */}
           <View style={styles.container}>
-            {/* HERO */}
             <View style={styles.hero}>
               <Image
                 source={require('../../assets/images/MFD.png')}
@@ -106,9 +105,7 @@ const Login = () => {
               </Text>
             </View>
 
-            {/* CARD (compact so it fits without scroll) */}
             <View style={styles.card}>
-              {/* Email */}
               <Text style={styles.inputLabel}>Email</Text>
               <View style={styles.inputWrap}>
                 <MaterialIcons name="mail-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />

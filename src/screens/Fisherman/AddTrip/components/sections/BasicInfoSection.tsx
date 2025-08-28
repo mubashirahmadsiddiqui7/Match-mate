@@ -1,8 +1,7 @@
 /* eslint-disable react-native/no-inline-styles */
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Pressable, Text, ActivityIndicator } from 'react-native';
+import { View, Text } from 'react-native';
 import TextField from '../fields/TextField';
-import DropdownField from '../fields/DropdownField';
 import { useFormContext } from 'react-hook-form';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -17,14 +16,6 @@ import {
 import PALETTE from '../../../../../theme/palette';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../../../../redux/store';
-
-const TRIP_TYPE_OPTIONS = [
-  'Fishing Trip',
-  'Transport Trip',
-  'Inspection Trip',
-  'Patrol Trip',
-  'Research Trip',
-];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const formatYmd12h = (d: Date) => {
@@ -314,14 +305,6 @@ export default function BasicInfoSection() {
         placeholder="Select Trip Type"
         rules={{ required: 'Trip type is required' }}
       />
-     
-     
-     
-
-      {/* Boat ID */}
-
-      {/* Trip Purpose */}
-     
     </>
   );
 }

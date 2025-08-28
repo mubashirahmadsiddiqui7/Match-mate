@@ -1,16 +1,17 @@
 // src/services/http.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
-// const BASE_URL = 'http://192.168.18.44:8000/api'; 
-const DEBUG = __DEV__; // only log in dev builds
+// const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
+// const BASE_URL = 'http://192.168.18.44:8000/api';
+const BASE_URL = 'http://72.167.79.161/MFD-Trace-Fish/api';
+const DEBUG = __DEV__;
 
 let authToken: string | null = null;
 
 export async function loadTokenFromStorage() {
   const t = await AsyncStorage.getItem('auth_token');
   authToken = t;
-  return t; 
+  return t;
 }
 export async function setAuthToken(token: string | null) {
   authToken = token;
@@ -31,7 +32,9 @@ function toQuery(q?: Record<string, any>) {
   if (!q) return '';
   const s = Object.entries(q)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .map(
+      ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+    )
     .join('&');
   return s ? `?${s}` : '';
 }
@@ -56,9 +59,14 @@ export async function api(path: string, opts: ReqOpts = {}) {
   };
 
   if (DEBUG) {
-    const tokenPreview = authToken ? `${authToken.slice(0, 8)}…${authToken.slice(-4)}` : null;
+    const tokenPreview = authToken
+      ? `${authToken.slice(0, 8)}…${authToken.slice(-4)}`
+      : null;
     console.groupCollapsed(`[HTTP] ${method} ${url}`);
-    console.log('headers:', { ...headers, Authorization: tokenPreview ? `Bearer ${tokenPreview}` : undefined });
+    console.log('headers:', {
+      ...headers,
+      Authorization: tokenPreview ? `Bearer ${tokenPreview}` : undefined,
+    });
     if (opts.body && !opts.isUpload) console.log('body:', opts.body);
     console.groupEnd();
   }
@@ -66,7 +74,11 @@ export async function api(path: string, opts: ReqOpts = {}) {
   const res = await fetch(url, {
     method,
     headers,
-    body: opts.isUpload ? (opts.body as any) : opts.body ? JSON.stringify(opts.body) : undefined,
+    body: opts.isUpload
+      ? (opts.body as any)
+      : opts.body
+      ? JSON.stringify(opts.body)
+      : undefined,
     signal: opts.signal,
   });
 
@@ -82,11 +94,14 @@ export async function api(path: string, opts: ReqOpts = {}) {
 
   let json: any = null;
   if (contentType.includes('application/json')) {
-    try { json = text ? JSON.parse(text) : {}; } catch {}
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {}
   }
 
   if (!res.ok) {
-    const msg = json?.message || (text ? text.slice(0, 200) : `HTTP ${res.status}`);
+    const msg =
+      json?.message || (text ? text.slice(0, 200) : `HTTP ${res.status}`);
     const err: any = new Error(msg);
     err.status = res.status;
     err.response = json ?? text;
@@ -96,7 +111,11 @@ export async function api(path: string, opts: ReqOpts = {}) {
   if (!json) throw new Error('Invalid server response (expected JSON).');
 
   if (json.success === false) {
-    const msg = json.message || (json.errors ? Object.values(json.errors).flat()?.join('\n') : 'Request failed');
+    const msg =
+      json.message ||
+      (json.errors
+        ? Object.values(json.errors).flat()?.join('\n')
+        : 'Request failed');
     throw new Error(msg);
   }
 

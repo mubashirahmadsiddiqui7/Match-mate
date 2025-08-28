@@ -4,7 +4,7 @@ import TextField from '../fields/TextField';
 export default function ContactSpeciesCostSection() {
   return (
     <>
-    <TextField
+      <TextField
         name="crewCount"
         label="Total crew members (1–50)"
         placeholder="e.g., 5"
@@ -26,19 +26,6 @@ export default function ContactSpeciesCostSection() {
         placeholder="Contact Number"
         keyboardType="phone-pad"
       />
-
-     
-
-      
-{/* 
-      <TextField
-        name="fuelCost"
-        label="Fuel Cost (Rs)"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-      /> */}
-     
-     
     </>
   );
 }
