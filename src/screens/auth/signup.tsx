@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,27 +8,118 @@ import {
   ScrollView,
   Platform,
   TextInput,
-  Button,
   Image,
   Alert,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import {
   ImagePickerResponse,
   launchCamera,
   launchImageLibrary,
 } from 'react-native-image-picker';
-import RadioGroup from 'react-native-radio-buttons-group';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../../types';
 import { StackNavigationProp } from '@react-navigation/stack';
 
+/* ===== Theme ===== */
+const GREEN = '#1f720d';
+const TEXT_DARK = '#0B1220';
+const TEXT_MUTED = '#6B7280';
+const BORDER = '#E5E7EB';
+const SURFACE = '#FFFFFF';
+const BG = '#F5F7FA';
+
+type Nav = StackNavigationProp<RootStackParamList, 'Login'>;
+
+/* ===== Helpers (PK formats) ===== */
+const maskCNIC = (raw: string) => {
+  const d = raw.replace(/\D/g, '').slice(0, 13);
+  const a = d.slice(0, 5);
+  const b = d.slice(5, 12);
+  const c = d.slice(12);
+  let out = a;
+  if (b) out += '-' + b;
+  if (c) out += '-' + c;
+  return out;
+};
+const maskPhonePK = (raw: string) => {
+  const d = raw.replace(/\D/g, '').slice(0, 11);
+  if (d.startsWith('03')) {
+    const a = d.slice(0, 4);
+    const b = d.slice(4);
+    return b ? `${a}-${b}` : a;
+  }
+  return d;
+};
+
+// Put this where RoleSelector is defined (same file)
+import { useWindowDimensions } from 'react-native';
+
+function RoleSelector({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (v: string) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const twoCol = width < 360; // tweak breakpoint if you like
+  const pillColStyle = twoCol ? styles.rolePill2Col : styles.rolePill3Col;
+
+  const options = [
+    { id: 'Fisherman', label: 'Fisherman', icon: 'sailing' },
+    { id: 'Middleman', label: 'Middleman', icon: 'handshake' },
+    { id: 'Exporter', label: 'Exporter', icon: 'local-shipping' },
+    { id: 'MFD', label: 'MFD', icon: 'admin-panel-settings' },
+    { id: 'FCS', label: 'FCS', icon: 'account-balance' },
+  ];
+
+  return (
+    <View style={styles.rolesRow}>
+      {options.map(opt => {
+        const active = value === opt.id;
+        return (
+          <TouchableOpacity
+            key={opt.id}
+            onPress={() => onChange(opt.id)}
+            activeOpacity={0.9}
+            style={[styles.rolePill, pillColStyle, active && styles.rolePillActive]}
+            accessibilityRole="button"
+            accessibilityLabel={opt.label}
+          >
+            <MaterialIcons
+              name={opt.icon as any}
+              size={16}
+              color={active ? '#FFFFFF' : GREEN}
+              style={{ marginRight: 6 }}
+            />
+            <Text
+              style={[styles.rolePillText, active && styles.rolePillTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+
 const SignUp = () => {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'Login'>>();
+  const navigation = useNavigation<Nav>();
   const [name, setName] = useState('');
   const [cnic, setCnic] = useState('');
   const [job, setJob] = useState<string | undefined>(undefined);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showCPass, setShowCPass] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -41,30 +132,6 @@ const SignUp = () => {
     confirmPassword?: string;
     phoneNumber?: string;
   }>({});
-
-  const radioButtons = useMemo(
-    () => [
-      {
-        id: '1',
-        label: 'Fisherman',
-        value: 'Fisherman',
-        labelStyle: { fontSize: 12 },
-      },
-      {
-        id: '2',
-        label: 'Middleman',
-        value: 'Middleman',
-        labelStyle: { fontSize: 12 },
-      },
-      {
-        id: '3',
-        label: 'Exporter',
-        value: 'Exporter',
-        labelStyle: { fontSize: 12 },
-      },
-    ],
-    [],
-  );
 
   const handleImagePress = async () => {
     const options: {
@@ -87,13 +154,10 @@ const SignUp = () => {
         },
       },
     ];
-
     if (imageUri) {
       options.push({
         text: 'Remove Photo',
-        onPress: async () => {
-          setImageUri(null);
-        },
+        onPress: async () => setImageUri(null),
         style: 'destructive',
       });
     }
@@ -108,287 +172,423 @@ const SignUp = () => {
   };
 
   const handleSignUp = () => {
-    const newErrors: {
-      name?: string;
-      cnic?: string;
-      email?: string;
-      password?: string;
-      confirmPassword?: string;
-      phoneNumber?: string;
-    } = {};
-
+    const newErrors: typeof errors = {};
     if (!name.trim()) newErrors.name = 'Name is required.';
     if (!cnic.trim()) newErrors.cnic = 'CNIC is required.';
     if (!phoneNumber.trim()) newErrors.phoneNumber = 'Phone Number is required.';
-    if (!email.trim()) {
-      newErrors.email = 'Email is required.';
-    } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-      newErrors.email = 'Enter a valid email address.';
-    }
+    if (!email.trim()) newErrors.email = 'Email is required.';
+    else if (!/^\S+@\S+\.\S+$/.test(email)) newErrors.email = 'Enter a valid email address.';
     if (!password) newErrors.password = 'Password is required.';
     if (!confirmPassword) newErrors.confirmPassword = 'Confirm your password.';
     if (password && confirmPassword && password !== confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match.';
     }
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      Alert.alert(`Signed up as: ${name} (${job || 'No job selected'})`);
-    }, 1500);
+
+      Alert.alert(`Signed up as: ${name} (${job || 'No role selected'})`);
+    }, 1200);
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1 }}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Image
-          source={require('../../assets/images/EmblemGOP.png')}
-          style={styles.image}
-        />
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.root}>
+        {/* Soft background shapes */}
+        <View style={styles.bgDecorTop} />
+        <View style={styles.bgDecorBottom} />
 
-        <View style={styles.formContainer}>
-          <View style={styles.header}>
-            <Text style={styles.headerText}>Sign Up</Text>
-          </View>
-
-          <View style={styles.box}>
-            {/* Profile Photo */}
-            <TouchableOpacity onPress={handleImagePress}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero */}
+            <View style={styles.hero}>
               <Image
-                style={styles.profileImage}
-                source={
-                  imageUri
-                    ? { uri: imageUri }
-                    : require('../../assets/images/placeholderIMG.png')
-                }
+                source={require('../../assets/images/MFD.png')}
+                style={styles.emblem}
+                resizeMode="contain"
               />
-              <Text style={styles.imgText}>Upload Profile Photo</Text>
-            </TouchableOpacity>
-
-            {/* Name */}
-            <TextInput
-              placeholder="Full Name"
-              value={name}
-              onChangeText={text => {
-                setName(text);
-                if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
-              }}
-              style={styles.input}
-              placeholderTextColor="#999999"
-            />
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
-
-            {/* CNIC */}
-            <TextInput
-              placeholder="CNIC"
-              value={cnic}
-              onChangeText={text => {
-                setCnic(text);
-                if (errors.cnic) setErrors(prev => ({ ...prev, cnic: '' }));
-              }}
-              style={styles.input}
-              placeholderTextColor="#999999"
-              keyboardType="numeric"
-            />
-            {errors.cnic && <Text style={styles.errorText}>{errors.cnic}</Text>}
-
-            {/* Job Selection */}
-            <View style={styles.radioGroup}>
-              <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>
-                I am a:
+              <Text style={styles.title}>Create your account</Text>
+              <Text style={styles.subtitle}>
+                Join the Marine Fisheries Portal to manage trips, activities and lots — all in one place.
               </Text>
-              <RadioGroup
-                radioButtons={radioButtons}
-                onPress={setJob}
-                selectedId={job}
-                layout="row"
-              />
             </View>
-            {/* Phone Number */}
-            <TextInput
-              placeholder="Phone Number"
-              value={phoneNumber}
-              onChangeText={text => {
-                setPhoneNumber(text);
-                if (errors.phoneNumber) setErrors(prev => ({ ...prev, phoneNumber: '' }));
-              }}
-              style={styles.input}
-              placeholderTextColor="#999999"
-              keyboardType="numeric"
-            />
-            {errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
-            {/* Email */}
-            <TextInput
-              placeholder="Email"
-              value={email}
-              onChangeText={text => {
-                setEmail(text);
-                if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              placeholderTextColor="#999999"
-            />
-            {errors.email && (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            )}
 
-            {/* Password */}
-            <TextInput
-              placeholder="Password"
-              value={password}
-              onChangeText={text => {
-                setPassword(text);
-                if (errors.password)
-                  setErrors(prev => ({ ...prev, password: '' }));
-              }}
-              secureTextEntry
-              style={styles.input}
-              placeholderTextColor="#999999"
-            />
-            {errors.password && (
-              <Text style={styles.errorText}>{errors.password}</Text>
-            )}
-
-            {/* Confirm Password */}
-            <TextInput
-              placeholder="Confirm Password"
-              value={confirmPassword}
-              onChangeText={text => {
-                setConfirmPassword(text);
-                if (errors.confirmPassword)
-                  setErrors(prev => ({ ...prev, confirmPassword: '' }));
-              }}
-              secureTextEntry
-              style={styles.input}
-              placeholderTextColor="#999999"
-            />
-            {errors.confirmPassword && (
-              <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-            )}
-
-            {/* Buttons */}
-            <View style={styles.buttonRow}>
-              <View style={{ flex: 1, marginRight: 5 }}>
-                <Button
-                  title={loading ? 'Loading...' : 'SAVE'}
-                  onPress={handleSignUp}
-                  color="#1f720dff"
-                />
+            {/* Form Card */}
+            <View style={styles.card}>
+              {/* Photo */}
+              <View style={styles.photoWrap}>
+                <TouchableOpacity onPress={handleImagePress} activeOpacity={0.9}>
+                  <Image
+                    style={styles.profileImage}
+                    source={
+                      imageUri
+                        ? { uri: imageUri }
+                        : require('../../assets/images/placeholderIMG.png')
+                    }
+                  />
+                  <View style={styles.cameraBadge}>
+                    <MaterialIcons name="photo-camera" size={16} color="#fff" />
+                  </View>
+                </TouchableOpacity>
+                <Text style={styles.imgText}>Tap to add your profile photo</Text>
               </View>
-              <View style={{ flex: 1, marginLeft: 5 }}>
-                <Button
-                  title="CANCEL"
-                  onPress={() => {
-                    setName('');
-                    setEmail('');
-                    setPassword('');
-                    setConfirmPassword('');
-                    setErrors({});
-                    navigation.goBack();
+
+              {/* Name */}
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="badge" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="Your full name"
+                  placeholderTextColor="#9CA3AF"
+                  value={name}
+                  onChangeText={t => {
+                    setName(t);
+                    if (errors.name) setErrors(p => ({ ...p, name: '' }));
                   }}
-                  color="#000000"
+                  style={styles.input}
+                  returnKeyType="next"
                 />
               </View>
+              {!!errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+              {/* CNIC */}
+              <Text style={styles.inputLabel}>CNIC</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="badge" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="12345-1234567-1"
+                  placeholderTextColor="#9CA3AF"
+                  value={cnic}
+                  onChangeText={t => {
+                    const v = maskCNIC(t);
+                    setCnic(v);
+                    if (errors.cnic) setErrors(p => ({ ...p, cnic: '' }));
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={15}
+                  style={styles.input}
+                />
+              </View>
+              {!!errors.cnic && <Text style={styles.errorText}>{errors.cnic}</Text>}
+
+              {/* Role (custom pills — NO overflow) */}
+              <Text style={styles.inputLabel}>I am a</Text>
+              <RoleSelector value={job} onChange={setJob} />
+
+              {/* Phone */}
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="call" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="03XX-XXXXXXX"
+                  placeholderTextColor="#9CA3AF"
+                  value={phoneNumber}
+                  onChangeText={t => {
+                    const v = maskPhonePK(t);
+                    setPhoneNumber(v);
+                    if (errors.phoneNumber) setErrors(p => ({ ...p, phoneNumber: '' }));
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={12}
+                  style={styles.input}
+                />
+              </View>
+              {!!errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
+
+              {/* Email */}
+              <Text style={styles.inputLabel}>Email</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="mail-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="you@example.com"
+                  placeholderTextColor="#9CA3AF"
+                  value={email}
+                  onChangeText={t => {
+                    setEmail(t);
+                    if (errors.email) setErrors(p => ({ ...p, email: '' }));
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+              </View>
+              {!!errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+
+              {/* Password */}
+              <Text style={styles.inputLabel}>Password</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="lock-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={t => {
+                    setPassword(t);
+                    if (errors.password) setErrors(p => ({ ...p, password: '' }));
+                  }}
+                  secureTextEntry={!showPass}
+                  style={styles.input}
+                  returnKeyType="next"
+                />
+                <TouchableOpacity style={styles.eye} onPress={() => setShowPass(s => !s)}>
+                  <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color={TEXT_MUTED} />
+                </TouchableOpacity>
+              </View>
+              {!!errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
+              {/* Confirm Password */}
+              <Text style={styles.inputLabel}>Confirm Password</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="lock-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={confirmPassword}
+                  onChangeText={t => {
+                    setConfirmPassword(t);
+                    if (errors.confirmPassword) setErrors(p => ({ ...p, confirmPassword: '' }));
+                  }}
+                  secureTextEntry={!showCPass}
+                  style={styles.input}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity style={styles.eye} onPress={() => setShowCPass(s => !s)}>
+                  <MaterialIcons name={showCPass ? 'visibility-off' : 'visibility'} size={20} color={TEXT_MUTED} />
+                </TouchableOpacity>
+              </View>
+              {!!errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+
+              {/* CTAs */}
+              <TouchableOpacity
+                onPress={handleSignUp}
+                disabled={loading}
+                style={[styles.primaryBtn, loading && { opacity: 0.85 }]}
+                activeOpacity={0.9}
+              >
+                <MaterialIcons name="person-add-alt" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.primaryBtnText}>{loading ? 'Creating…' : 'Create Account'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setName('');
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setCnic('');
+                  setPhoneNumber('');
+                  setErrors({});
+                  navigation.goBack();
+                }}
+                style={styles.secondaryBtn}
+                activeOpacity={0.9}
+              >
+                <MaterialIcons name="close" size={18} color={GREEN} style={{ marginRight: 8 }} />
+                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.microcopy}>
+                By creating an account, you agree to keep your information accurate and follow local regulations.
+              </Text>
+
+              {/* Already have account */}
+              <View style={styles.switchRow}>
+                <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Login' as any)}>
+                  <Text style={styles.link}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    backgroundColor: '#fff',
-    flexGrow: 1,
-    justifyContent: 'flex-end',
-  },
-  image: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  formContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  header: {
-    backgroundColor: '#1f720dff',
-    paddingVertical: 15,
+  root: { flex: 1, backgroundColor: BG },
+  scrollContainer: { paddingHorizontal: 16, paddingVertical: 18 },
+
+  /* Hero */
+  hero: {
     alignItems: 'center',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  headerText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  box: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 25,
+    backgroundColor: GREEN,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
+  emblem: { width: 84, height: 84, marginBottom: 6 },
+  title: { fontSize: 20, fontWeight: '800', color: SURFACE },
+  subtitle: { fontSize: 12, color: SURFACE, textAlign: 'center', marginTop: 4 },
+
+  /* Card */
+  card: {
+    backgroundColor: SURFACE,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+
+  /* Photo */
+  photoWrap: { alignItems: 'center', marginBottom: 6 },
   profileImage: {
-    height: 200,
-    width: 200,
-    borderRadius: 160,
-    marginBottom: 5,
-    alignSelf: 'center',
-    borderColor: '#1f720dff',
+    height: 112,
+    width: 112,
+    borderRadius: 56,
     borderWidth: 1,
+    borderColor: GREEN,
   },
-  imgText: {
-    textAlign: 'center',
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  radioGroup: {
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    backgroundColor: GREEN,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
-    marginVertical: 10,
+    justifyContent: 'center',
+    elevation: 3,
   },
-  input: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    color: '#000000ff',
-  },
-  buttonRow: {
+  imgText: { textAlign: 'center', fontWeight: '700', color: TEXT_MUTED, marginTop: 8, marginBottom: 8 },
+
+  /* Inputs */
+  inputLabel: { fontSize: 12, color: TEXT_MUTED, marginTop: 8, marginBottom: 6, marginLeft: 2 },
+  inputWrap: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: SURFACE,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  inputIcon: { marginRight: 6 },
+  input: { flex: 1, color: TEXT_DARK, paddingVertical: 10, fontSize: 14 },
+  eye: { padding: 6, marginLeft: 4 },
+   rolesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: 6,
+    // no gap for max RN support
+  },
+  rolePill: {
+    minWidth: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    borderRadius: 12,
+    backgroundColor: '#F2FBF3',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /* 2 columns on narrow screens */
+  rolePill2Col: {
+    flexBasis: '48%',
+    maxWidth: '48%',
+    marginHorizontal: 4,
+    marginVertical: 4,
+  },
+  /* 3 columns on wider screens */
+  rolePill3Col: {
+    flexBasis: '31%',
+    maxWidth: '45%',
+    marginHorizontal: 4,
+    marginVertical: 4,
+  },
+  rolePillActive: { backgroundColor: GREEN },
+  rolePillText: {
+    color: GREEN,
+    fontWeight: '800',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  rolePillTextActive: { color: '#FFFFFF' },
+
+  /* Role: equal width pills (no overflow) */
+  
+  /* Errors */
+  errorText: { color: '#DC2626', fontSize: 12, marginTop: 6, marginLeft: 2 },
+
+  /* Buttons */
+  primaryBtn: {
+    backgroundColor: GREEN,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    marginTop: 12,
+  },
+  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+
+  secondaryBtn: {
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    backgroundColor: '#F2FBF3',
     marginTop: 10,
   },
-  errorText: {
-    color: 'red',
-    fontSize: 12,
-    marginBottom: 8,
-    marginLeft: 4,
+  secondaryBtnText: { color: GREEN, fontWeight: '800', fontSize: 15 },
+
+  microcopy: { marginTop: 10, color: TEXT_MUTED, fontSize: 11, textAlign: 'center' },
+  switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 },
+  link: { color: GREEN, fontSize: 12, fontWeight: '800' },
+
+  /* Soft shapes */
+  bgDecorTop: {
+    position: 'absolute',
+    top: -90,
+    right: -70,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: '#E8F5E9',
+    opacity: 0.8,
+  },
+  bgDecorBottom: {
+    position: 'absolute',
+    bottom: -110,
+    left: -80,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: '#E0F2FE',
+    opacity: 0.7,
   },
 });
 

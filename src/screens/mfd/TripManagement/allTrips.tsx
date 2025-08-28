@@ -139,7 +139,6 @@ export default function TripsScreen() {
           </Text>
         </View>
 
-        {/* Footer action (simple, right‑aligned) */}
         <View style={styles.cardActions}>
           <View style={styles.openBtn}>
             <Text style={styles.openBtnText}>Open</Text>

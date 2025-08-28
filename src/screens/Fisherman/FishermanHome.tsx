@@ -421,15 +421,16 @@ export default function FishermanHome() {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsList}>
             <ActionCard
+              label="Offline Trips"
+              icon="cloud-off"
+              onPress={() => navigation.navigate('OfflineTrips' as any)}
+            />
+            <ActionCard
               label="All Trips"
               icon="room-service"
               onPress={() => navigation.navigate('AllTrip')}
             />
-            <ActionCard
-              label="Pending Offline Trips"
-              icon="cloud-off"
-              onPress={() => navigation.navigate('OfflineTrips' as any)}
-            />
+            
             <ActionCard
               label="+ New Trip"
               icon="add-location-alt"
@@ -442,6 +443,16 @@ export default function FishermanHome() {
             />
             <ActionCard
               label="All Species"
+              icon="set-meal"
+              onPress={() => navigation.navigate('LotsList')}
+            />
+            <ActionCard
+              label="All Boats"
+              icon="set-meal"
+              onPress={() => navigation.navigate('LotsList')}
+            />
+            <ActionCard
+              label="Register Boat"
               icon="set-meal"
               onPress={() => navigation.navigate('LotsList')}
             />
