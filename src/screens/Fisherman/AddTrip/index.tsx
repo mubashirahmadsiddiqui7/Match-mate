@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-shadow */
 /* eslint-disable react-native/no-inline-styles */
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -19,8 +25,8 @@ import { s } from './styles';
 import { buildTripId } from '../../../utils/ids';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
 import BasicInfoSection, {
-  parseYmd12h,
   formatYmd12h,
+  parseYmd12h,
 } from './components/sections/BasicInfoSection';
 import DropdownsSection from './components/sections/DropdownsSection';
 import ContactSpeciesCostSection from './components/sections/ContactSpeciesCostSection';
@@ -51,6 +57,7 @@ import FishingInformation from './components/sections/FishingInformaton';
 /** ---------- local form type (includes new fields) ---------- */
 export type FormValues = {
   fisherman: string;
+  fisherman_id: string;
   departure_time: string;
 
   // Basic info (new required)
@@ -89,6 +96,93 @@ export type FormValues = {
 const HEADER_BG = '#1f720d';
 type TripRoute = RouteProp<FishermanStackParamList, 'Trip'>;
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'Trip'>;
+
+import { Animated, Easing } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { StartTripCTA } from './components/StartTripButton';
+
+function LockNotice({ visible }: { visible: boolean }) {
+  const slide = useRef(new Animated.Value(-80)).current; // slide from top
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(slide, {
+          toValue: 0,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 260,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slide, {
+          toValue: -80,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, slide, opacity]);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateY: slide }],
+        opacity,
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#34D399', // emerald-400
+        backgroundColor: '#ECFDF5', // emerald-50
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+      }}
+    >
+      <MaterialIcons name="check-circle" size={22} color="#059669" />
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: '#065F46', fontWeight: '800' }}>Trip saved</Text>
+        <Text style={{ color: '#065F46' }}>
+          Details are locked. Review then press{' '}
+          <Text style={{ fontWeight: '700' }}>Start Trip</Text>.
+        </Text>
+      </View>
+      <MaterialIcons name="lock" size={20} color="#065F46" />
+    </Animated.View>
+  );
+}
+
+function LockOverlay({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(15, 23, 42, 0.06)', // slate-900 @ 6%
+        borderRadius: 16,
+      }}
+    />
+  );
+}
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const formatYmd = (d: Date) =>
@@ -138,6 +232,7 @@ export default function AddTripScreen() {
   const methods = useForm<FormValues>({
     defaultValues: {
       fisherman: name,
+      fisherman_id: profile?.id ? String(profile.id) : '',
       departure_time: formatYmd12h(new Date()),
 
       captainNameId: '',
@@ -190,7 +285,12 @@ export default function AddTripScreen() {
       setServerTrip(t);
 
       const formVals: FormValues = {
-        fisherman: t.fisherman?.id ? String(t.fisherman.id) : '',
+        fisherman: t.fisherman?.name || profile?.name || '',
+        fisherman_id: t.fisherman?.id
+          ? String(t.fisherman.id)
+          : profile?.id
+          ? String(profile.id)
+          : '',
         departure_time: t.departure_time || formatYmd12h(new Date()),
 
         // server doesn’t return all the new fields yet; leave blank
@@ -232,7 +332,7 @@ export default function AddTripScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isEdit, editingId, methods, navigation]);
+  }, [isEdit, editingId, profile?.name, profile.id, methods, navigation]);
 
   useEffect(() => {
     loadForEdit();
@@ -257,7 +357,7 @@ export default function AddTripScreen() {
 
     // Basic required presence guard (mirrors your server errors)
     const requiredPairs: Array<[string, any, string]> = [
-      ['fisherman_id', values.fisherman, 'Fisherman is required'],
+      ['fisherman_id', profile?.id, 'Fisherman is required'],
       ['boat_registration_number', values.boatNameId, 'Boat ID is required'],
       ['trip_type', values.tripType, 'Trip Type is required'],
       ['captain_name', values.captainNameId, 'Captain name is required'],
@@ -302,10 +402,7 @@ export default function AddTripScreen() {
       const dt = parseYmd12h(departureDisplay);
       const departure_date = formatYmd(dt);
 
-      const fishermanId =
-        values.fisherman !== '' && values.fisherman != null
-          ? Number(values.fisherman)
-          : undefined;
+      const fishermanId = Number(values.fisherman_id || profile?.id);
 
       const tripTypeRaw = values.tripType?.trim() || 'Fishing Trip';
       const trip_type = TRIP_TYPE_MAP[tripTypeRaw] ?? 'fishing';
@@ -600,6 +697,8 @@ export default function AddTripScreen() {
     }
   }, [createdTrip, serverTrip, methods, navigation]);
 
+  const isLocked = !isEdit && !!createdTrip?.id;
+
   return (
     <SafeAreaView
       edges={['top', 'bottom']}
@@ -653,6 +752,27 @@ export default function AddTripScreen() {
             </View>
           </View>
         </View>
+        {/* {isLocked && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 12,
+              padding: 10,
+              borderRadius: 10,
+              backgroundColor: '#d43f12ff',
+              borderWidth: 1,
+              borderColor: '#E5E7EB',
+            }}
+          >
+            <Text style={{ color: '#0B1220', fontWeight: '700' }}>
+              Trip saved successfully
+            </Text>
+            <Text style={{ color: '#4B5563' }}>
+              Details are locked. You can start the trip now by clicking on start trip button.
+            </Text>
+          </View>
+        )} */}
+        {isLocked && <LockNotice visible={isLocked} />}
 
         {/* Body */}
         {loading ? (
@@ -673,104 +793,116 @@ export default function AddTripScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <FormProvider {...methods}>
-              <SectionCard
-                title="Starting Location"
-                subtitle={
-                  isEdit
-                    ? 'Optional for edits'
-                    : 'Capture your current coordinates'
-                }
-              >
-                <LocationCard
-                  gps={gps}
-                  loading={gpsLoading}
-                  onRecapture={recapture}
-                />
-              </SectionCard>
-              <SectionCard
-                title="Basic Info"
-                subtitle="Captain & vessel details"
-              >
-                <BasicInfoSection />
-              </SectionCard>
-              <SectionCard
-                title="Captain & Crew Info"
-                subtitle="Captain & vessel details"
-              >
-                <CaptainInfo />
-              </SectionCard>
+              {/* --- Optional lock banner when created --- */}
 
-              <SectionCard
-                title="Fuel & Ice Info"
-                // subtitle="Captain & vessel details"
+              {/* --- Lock all sections when created (but keep Start button active) --- */}
+              <View
+                pointerEvents={isLocked ? 'none' : 'auto'}
+                style={{ opacity: isLocked ? 0.6 : 1 }}
               >
-                <FuelIceInformation />
-              </SectionCard>
+                <SectionCard
+                  title="Starting Location"
+                  subtitle={
+                    isEdit
+                      ? 'Optional for edits'
+                      : 'Capture your current coordinates'
+                  }
+                >
+                  <LocationCard
+                    gps={gps}
+                    loading={gpsLoading}
+                    onRecapture={recapture}
+                  />
+                </SectionCard>
 
-              <SectionCard
-                title="Location Information"
-                // subtitle="Captain & vessel details"
-              >
-                <LocationInformation />
-              </SectionCard>
+                <SectionCard
+                  title="Basic Info"
+                  subtitle="Captain & vessel details"
+                >
+                  <BasicInfoSection />
+                </SectionCard>
 
-              <SectionCard
-                title="Departure Information"
-                subtitle="Port and sea conditions"
-              >
-                <DropdownsSection />
-              </SectionCard>
+                <SectionCard
+                  title="Captain & Crew Info"
+                  subtitle="Captain & vessel details"
+                >
+                  <CaptainInfo />
+                </SectionCard>
 
-              <SectionCard
-                title="Safety & Crew Information"
-                subtitle="Emergency contact and species"
-              >
-                <ContactSpeciesCostSection />
-              </SectionCard>
-               <SectionCard
-                title=" Fishing Information"
-                subtitle="Target species"
-              >
-                <FishingInformation />
-              </SectionCard>
-              
+                <SectionCard title="Fuel & Ice Info">
+                  <FuelIceInformation />
+                </SectionCard>
 
-              {/* For CREATE: Show Save until created; then show Start */}
-              {!isEdit && !createdTrip?.id ? (
-                <SaveBar
-                  gpsAvailable={!!gps}
-                  onSave={handleSavePress}
-                  loading={saving}
-                />
-              ) : null}
+                <SectionCard title="Location Information">
+                  <LocationInformation />
+                </SectionCard>
 
-              {!isEdit && createdTrip?.id ? (
-                <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-                  <Pressable
-                    onPress={handleStart}
-                    disabled={actionLoading}
-                    style={({ pressed }) => [
-                      {
-                        height: 48,
-                        borderRadius: 12,
-                        backgroundColor: '#1f720d',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: actionLoading ? 0.7 : pressed ? 0.9 : 1,
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Start Trip"
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>
-                      {actionLoading ? 'Starting…' : 'Start Trip'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
+                <SectionCard
+                  title="Departure Information"
+                  subtitle="Port and sea conditions"
+                >
+                  <DropdownsSection />
+                </SectionCard>
+
+                <SectionCard
+                  title="Safety & Crew Information"
+                  subtitle="Emergency contact and species"
+                >
+                  <ContactSpeciesCostSection />
+                </SectionCard>
+
+                <SectionCard
+                  title=" Fishing Information"
+                  subtitle="Target species"
+                >
+                  <FishingInformation />
+                </SectionCard>
+
+                {/* Hide SaveBar once created */}
+                {!isEdit && !createdTrip?.id ? (
+                  <SaveBar
+                    gpsAvailable={!!gps}
+                    onSave={handleSavePress}
+                    loading={saving}
+                  />
+                ) : null}
+              </View>
+
+              {/* Start button stays interactive even when locked */}
             </FormProvider>
           </ScrollView>
         )}
+        {/* {!isEdit && createdTrip?.id ? (
+          <View style={{ paddingHorizontal: 16, marginTop: 12,marginBottom:10, }}>
+            <Pressable
+              onPress={handleStart}
+              disabled={actionLoading}
+              style={({ pressed }) => [
+                {
+                  height: 48,
+                  borderRadius: 12,
+                  backgroundColor: '#1f720d',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: actionLoading ? 0.7 : pressed ? 0.9 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Start Trip"
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>
+                {actionLoading ? 'Starting…' : 'Start Trip'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null} */}
+        {!isEdit && createdTrip?.id ? (
+          <StartTripCTA
+            onPress={handleStart}
+            disabled={actionLoading}
+            loading={actionLoading}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );
