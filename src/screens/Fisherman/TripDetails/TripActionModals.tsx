@@ -11,6 +11,7 @@ import {
   ScrollView,
   Platform,
   useWindowDimensions,
+  TouchableOpacity,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Dropdown } from 'react-native-element-dropdown';
@@ -53,7 +54,12 @@ export function CancelTripModal({
   const canSubmit = reason.trim().length >= 5 && !loading;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.backdrop}>
         <View style={[styles.sheet, { maxWidth: 720 }]}>
           <View style={styles.headerRow}>
@@ -79,12 +85,20 @@ export function CancelTripModal({
               placeholderTextColor={MUTED}
               multiline
             />
-            {!!reasonError && <Text style={styles.errorText}>{reasonError}</Text>}
+            {!!reasonError && (
+              <Text style={styles.errorText}>{reasonError}</Text>
+            )}
           </View>
 
-          <View style={[styles.footerRow, stackButtons && styles.footerRowStack]}>
+          <View
+            style={[styles.footerRow, stackButtons && styles.footerRowStack]}
+          >
             <Pressable
-              style={[styles.btn, styles.btnGhost, stackButtons && styles.btnFull]}
+              style={[
+                styles.btn,
+                styles.btnGhost,
+                stackButtons && styles.btnFull,
+              ]}
               onPress={onClose}
               disabled={loading}
             >
@@ -183,7 +197,11 @@ export function CompleteTripModal({
   );
 
   const middleOptions = useMemo(
-    () => (middleMen || []).map(m => ({ label: String(m.name ?? m.id), value: m.id })),
+    () =>
+      (middleMen || []).map(m => ({
+        label: String(m.name ?? m.id),
+        value: m.id,
+      })),
     [middleMen],
   );
 
@@ -196,12 +214,21 @@ export function CompleteTripModal({
   );
 
   const [form, setForm] = useState<CompleteForm>({
-    landing_site: defaultLandingSite && ['Karachi Fish Harbor', 'Korangi Fish Harbor'].includes(defaultLandingSite)
-      ? defaultLandingSite
-      : '',
+    landing_site:
+      defaultLandingSite &&
+      ['Karachi Fish Harbor', 'Korangi Fish Harbor'].includes(
+        defaultLandingSite,
+      )
+        ? defaultLandingSite
+        : '',
     landing_notes: '',
     rows: [
-      { lot_no: availableLots[0]?.lot_no ?? '', middleman_id: null, quantity_kg: '', notes: '' },
+      {
+        lot_no: availableLots[0]?.lot_no ?? '',
+        middleman_id: null,
+        quantity_kg: '',
+        notes: '',
+      },
     ],
   });
 
@@ -215,11 +242,17 @@ export function CompleteTripModal({
   function addRow() {
     setForm(prev => ({
       ...prev,
-      rows: [...prev.rows, { lot_no: '', middleman_id: null, quantity_kg: '', notes: '' }],
+      rows: [
+        ...prev.rows,
+        { lot_no: '', middleman_id: null, quantity_kg: '', notes: '' },
+      ],
     }));
   }
   function removeRow(i: number) {
-    setForm(prev => ({ ...prev, rows: prev.rows.filter((_, idx) => idx !== i) }));
+    setForm(prev => ({
+      ...prev,
+      rows: prev.rows.filter((_, idx) => idx !== i),
+    }));
   }
 
   const totalAvailableKg = useMemo(
@@ -283,15 +316,29 @@ export function CompleteTripModal({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { maxHeight: '100%', width: '100%', maxWidth: 860 }]}>
+        <View
+          style={[
+            styles.sheet,
+            { maxHeight: '100%', width: '100%', maxWidth: 860 },
+          ]}
+        >
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.headerIconWrap}>
               <MaterialIcons name="checklist" size={18} color="#fff" />
             </View>
-            <Text style={[styles.title, styles.textWrap]} numberOfLines={1} ellipsizeMode="tail">
+            <Text
+              style={[styles.title, styles.textWrap]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {tripCode ? `#${tripCode}` : 'Complete Trip'}
             </Text>
           </View>
@@ -303,7 +350,10 @@ export function CompleteTripModal({
           <View
             style={[
               styles.summaryBar,
-              overAssign && { borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' },
+              overAssign && {
+                borderColor: '#FEE2E2',
+                backgroundColor: '#FEF2F2',
+              },
             ]}
           >
             <MaterialIcons
@@ -311,9 +361,18 @@ export function CompleteTripModal({
               size={16}
               color={overAssign ? DANGER : INFO}
             />
-            <Text style={[styles.summaryText, styles.textWrap, { color: overAssign ? DANGER : INFO }]}>
-              Assigned: <Text style={styles.bold}>{assignedKg.toFixed(2)} KG</Text>
-              {totalAvailableKg > 0 ? `  •  Available: ${totalAvailableKg.toFixed(2)} KG` : ''}
+            <Text
+              style={[
+                styles.summaryText,
+                styles.textWrap,
+                { color: overAssign ? DANGER : INFO },
+              ]}
+            >
+              Assigned:{' '}
+              <Text style={styles.bold}>{assignedKg.toFixed(2)} KG</Text>
+              {totalAvailableKg > 0
+                ? `  •  Available: ${totalAvailableKg.toFixed(2)} KG`
+                : ''}
               {overAssign ? '  — Reduce assigned KG to proceed' : ''}
             </Text>
           </View>
@@ -342,7 +401,9 @@ export function CompleteTripModal({
                         placeholder="Select Lot"
                         search
                         searchPlaceholder="Search lot..."
-                        onChange={item => updateRow(i, { lot_no: String(item.value) })}
+                        onChange={item =>
+                          updateRow(i, { lot_no: String(item.value) })
+                        }
                         style={styles.dd}
                         placeholderStyle={styles.ddPlaceholder}
                         selectedTextStyle={styles.ddSelected}
@@ -362,7 +423,9 @@ export function CompleteTripModal({
                         placeholder="Select Middle Man"
                         search
                         searchPlaceholder="Search middle man..."
-                        onChange={item => updateRow(i, { middleman_id: item.value })}
+                        onChange={item =>
+                          updateRow(i, { middleman_id: item.value })
+                        }
                         style={styles.dd}
                         placeholderStyle={styles.ddPlaceholder}
                         selectedTextStyle={styles.ddSelected}
@@ -382,7 +445,9 @@ export function CompleteTripModal({
                         style={styles.input}
                         placeholderTextColor={MUTED}
                       />
-                      {!!qtyErr && <Text style={styles.errorText}>{qtyErr}</Text>}
+                      {!!qtyErr && (
+                        <Text style={styles.errorText}>{qtyErr}</Text>
+                      )}
                     </FormField>
 
                     {/* Notes */}
@@ -398,7 +463,10 @@ export function CompleteTripModal({
                   </View>
 
                   {form.rows.length > 1 && (
-                    <Pressable onPress={() => removeRow(i)} style={styles.trashBtn}>
+                    <Pressable
+                      onPress={() => removeRow(i)}
+                      style={styles.trashBtn}
+                    >
                       <MaterialIcons name="delete" size={18} color="#fff" />
                     </Pressable>
                   )}
@@ -416,7 +484,10 @@ export function CompleteTripModal({
                   value={form.landing_site || null}
                   placeholder="Select landing site"
                   onChange={item =>
-                    setForm(prev => ({ ...prev, landing_site: String(item.value) }))
+                    setForm(prev => ({
+                      ...prev,
+                      landing_site: String(item.value),
+                    }))
                   }
                   style={styles.dd}
                   placeholderStyle={styles.ddPlaceholder}
@@ -430,7 +501,9 @@ export function CompleteTripModal({
                 <TextInput
                   placeholder="e.g., Trip completed successfully"
                   value={form.landing_notes}
-                  onChangeText={v => setForm(prev => ({ ...prev, landing_notes: v }))}
+                  onChangeText={v =>
+                    setForm(prev => ({ ...prev, landing_notes: v }))
+                  }
                   style={styles.input}
                   placeholderTextColor={MUTED}
                 />
@@ -440,13 +513,17 @@ export function CompleteTripModal({
             {/* Available lots helper */}
             {!!availableLots?.length && (
               <View style={styles.helperCard}>
-                <Text style={{ color: SUCCESS, fontWeight: '900' }}>Available Lots</Text>
+                <Text style={{ color: SUCCESS, fontWeight: '900' }}>
+                  Available Lots
+                </Text>
                 <View style={{ marginTop: 8, gap: 8 }}>
                   {availableLots.map(l => (
                     <Pressable
                       key={String(l.id)}
                       onPress={() => {
-                        const idx = form.rows.findIndex(row => !row.lot_no.trim());
+                        const idx = form.rows.findIndex(
+                          row => !row.lot_no.trim(),
+                        );
                         if (idx >= 0) updateRow(idx, { lot_no: l.lot_no });
                         else {
                           addRow();
@@ -455,10 +532,20 @@ export function CompleteTripModal({
                       }}
                       style={styles.lotPill}
                     >
-                      <Text style={[{ fontWeight: '800', color: TEXT }, styles.textWrap]}>
+                      <Text
+                        style={[
+                          { fontWeight: '800', color: TEXT },
+                          styles.textWrap,
+                        ]}
+                      >
                         {l.lot_no}
                       </Text>
-                      <Text style={[{ color: MUTED, fontWeight: '700' }, styles.textWrap]}>
+                      <Text
+                        style={[
+                          { color: MUTED, fontWeight: '700' },
+                          styles.textWrap,
+                        ]}
+                      >
                         {l.species_name ? ` ${l.species_name} —` : ' '}
                         {l.quantity_kg ?? ''} KG
                       </Text>
@@ -475,15 +562,36 @@ export function CompleteTripModal({
               </Text>
               <Pressable onPress={addRow} style={styles.addBtn}>
                 <MaterialIcons name="add" size={18} color={PRIMARY} />
-                <Text style={{color:'black'}}>
-                  Add Distribution
-                </Text>
+                <Text style={{ color: 'black' }}>Add Distribution</Text>
               </Pressable>
             </View>
           </ScrollView>
 
+          <View style={styles.row}>
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={[styles.button, styles.cancelBtn]}
+              onPress={onClose}
+            >
+              <MaterialIcons name="cancel" size={20} color="#DC2626" />
+              <Text style={[styles.btnText, { color: '#DC2626' }]}>Cancel</Text>
+            </TouchableOpacity>
+
+            {/* Complete Button */}
+            <TouchableOpacity
+              style={[styles.button, styles.completeBtn]}
+              onPress={handleSubmit}
+              disabled={!canSubmit || loading}
+            >
+              <MaterialIcons name="check-circle" size={20} color="#059669" />
+              <Text style={[styles.btnText, { color: '#059669' }]}>
+                Complete Trip
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Footer actions */}
-          <View style={[styles.footerRow, stackButtons && styles.footerRowStack]}>
+          {/* <View style={[styles.footerRow, stackButtons && styles.footerRowStack]}>
             <Pressable
               style={[styles.btn, styles.btnGhost, stackButtons && styles.btnFull]}
               onPress={onClose}
@@ -507,7 +615,7 @@ export function CompleteTripModal({
                 Complete Trip
               </Text>
             </Pressable>
-          </View>
+          </View> */}
         </View>
       </View>
     </Modal>
@@ -534,6 +642,32 @@ function FormField({
  * Styles
  * ========================================================================= */
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#F7F8FA',
+  },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  completeBtn: {
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  btnText: {
+    marginLeft: 6,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   /* layout */
   backdrop: {
     flex: 1,
@@ -580,7 +714,7 @@ const styles = StyleSheet.create({
   sub: { color: MUTED, fontWeight: '600' },
 
   /* text utilities */
-  textWrap: {marginBottom:10 },
+  textWrap: { marginBottom: 10 },
 
   /* form */
   label: { fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: '800' },

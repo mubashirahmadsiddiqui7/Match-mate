@@ -5,7 +5,7 @@ import { stripUndefined } from '../utils/json';
 /* =========================
  * Core types / constants
  * ========================= */
-export const TRIP_STATUSES = ['pending', 'approved', 'active', 'completed', 'cancelled'] as const;
+export const TRIP_STATUSES = ['pending','pending_approval' ,'approved', 'active', 'completed', 'cancelled'] as const;
 export type TripStatus = (typeof TRIP_STATUSES)[number];
 export type ID = number | string;
 
@@ -628,6 +628,20 @@ export async function completedTrip(id: ID, body: CompleteTripPayload) {
   const json = await api(`/trips/${id}/complete-trip`, { method: 'POST', body });
   return (json?.data ?? json) as Trip;
 }
+// export async function rejectTrip(id: ID) {
+//   const json = await api(`/trips/${id}/reject`, { method: 'POST' });
+//   return unwrap<Trip>(json);
+// }
+// services/trips.ts
+// ...
+export async function rejectTrip(id: ID, payload: { rejection_reason: string }) {
+  const json = await api(`/trips/${id}/reject`, {
+    method: 'POST',
+    body: payload, // must include rejection_reason
+  });
+  return unwrap<Trip>(json);
+}
+
 export async function approveTrip(id: ID) {
   const json = await api(`/trips/${id}/approve`, { method: 'POST' });
   return unwrap<Trip>(json);
@@ -672,11 +686,11 @@ export async function getTripById(id: number | string) {
   return adaptTrip(dto);
 }
 export async function getTripCounts(): Promise<{ totals: { all: number; pending: number; approved: number; active: number; completed: number; cancelled: number; }; errors: Partial<Record<'all' | TripStatus, string>>; }> {
-  const statuses: TripStatus[] = ['pending', 'approved', 'active', 'completed', 'cancelled'];
+  const statuses: TripStatus[] = ['pending','pending_approval', 'approved', 'active', 'completed', 'cancelled'];
   const reqs = [api('/trips', { query: { page: 1, per_page: 1 } }), ...statuses.map(status => api('/trips', { query: { status, page: 1, per_page: 1 } }))];
   const settled = await Promise.allSettled(reqs);
 
-  const totals = { all: 0, pending: 0, approved: 0, active: 0, completed: 0, cancelled: 0 };
+  const totals = { all: 0, pending: 0,pending_approval:0, approved: 0, active: 0, completed: 0, cancelled: 0 };
   const errors: Partial<Record<'all' | TripStatus, string>> = {};
 
   const allRes = settled[0];

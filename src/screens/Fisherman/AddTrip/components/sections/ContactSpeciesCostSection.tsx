@@ -34,13 +34,13 @@ export default function ContactSpeciesCostSection() {
           },
         }}
       />
-
+{/* 
       <TextField
         name="fuelCost"
         label="Fuel Cost (Rs)"
         placeholder="0.00"
         keyboardType="decimal-pad"
-      />
+      /> */}
       <TextField
         name="estimatedCatch"
         label="Estimated Catch weight (kg)"

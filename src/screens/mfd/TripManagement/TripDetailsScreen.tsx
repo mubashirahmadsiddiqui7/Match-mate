@@ -13,6 +13,9 @@ import {
   StatusBar,
   Platform,
   ToastAndroid,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {
   useNavigation,
@@ -28,6 +31,7 @@ import {
   completeTrip,
   cancelTrip,
   approveTrip,
+  rejectTrip, // <-- add this import
 } from '../../../services/trips';
 import { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
 import PALETTE from '../../../theme/palette';
@@ -43,6 +47,7 @@ const DANGER = PALETTE.error;
 
 const STATUS_COLORS: Record<NonNullable<TripDetails['status']>, string> = {
   pending: PALETTE.warn,
+  pending_approval: PALETTE.warn, // <-- ensure colored
   approved: PALETTE.info,
   active: PALETTE.purple,
   completed: PALETTE.green600,
@@ -69,12 +74,91 @@ function currency(v?: number | string | null) {
   if (Number.isNaN(num)) return '—';
   return num.toFixed(2);
 }
-function toTitle(s: string) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+function toTitle(s?: string | null) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
 }
 function toast(msg: string) {
   if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
   else Alert.alert(msg);
+}
+
+/* ---------- local modal for rejection reason ---------- */
+function RejectTripModal({
+  visible,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  loading: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+
+  // reset reason when opened/closed
+  useEffect(() => {
+    if (!visible) setReason('');
+  }, [visible]);
+
+  const disabled = loading || reason.trim().length < 3;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.select({ ios: 'padding', android: undefined })}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.modalCard, shadow(0.12, 12, 8)]}>
+          <View style={styles.modalHeader}>
+            <MaterialIcons name="thumb-down-off-alt" size={18} color={DANGER} />
+            <Text style={styles.modalTitle}>Reject Trip</Text>
+          </View>
+          <Text style={styles.modalHint}>
+            Please provide a brief reason for rejection (min 3 characters).
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Type your reason..."
+            placeholderTextColor={PALETTE.text500}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+
+          <View style={styles.modalBtnRow}>
+            <Pressable
+              onPress={onClose}
+              style={[styles.mBtn, styles.mBtnGhost]}
+              android_ripple={{ color: '#ddd' }}
+            >
+              <Text style={styles.mBtnGhostText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              disabled={disabled}
+              onPress={() => onSubmit(reason.trim())}
+              style={[
+                styles.mBtn,
+                styles.mBtnDanger,
+                disabled && { opacity: 0.6 },
+              ]}
+              android_ripple={{ color: '#fff2' }}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.mBtnDangerText}>Reject</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }
 
 /* ---------- screen ---------- */
@@ -86,8 +170,10 @@ export default function TripDetailsScreen() {
   const [trip, setTrip] = useState<TripDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
   const [showCancel, setShowCancel] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const [showReject, setShowReject] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -107,15 +193,13 @@ export default function TripDetailsScreen() {
     load();
   }, [load]);
 
-  // also refresh whenever screen regains focus (after actions)
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
 
-  const isPending = trip?.status === 'pending';
-
+  const isPendingApproval = trip?.status === 'pending_approval';
   const statusColor = trip ? STATUS_COLORS[trip.status] : PALETTE.text700;
 
   const reload = useCallback(async () => {
@@ -176,6 +260,7 @@ export default function TripDetailsScreen() {
     },
     [trip, reload],
   );
+
   const handleApprove = useCallback(async () => {
     if (!trip) return;
     try {
@@ -190,11 +275,32 @@ export default function TripDetailsScreen() {
     }
   }, [trip, reload]);
 
+const handleReject = useCallback(
+  async (reason: string) => {
+    if (!trip) return;
+    try {
+      setActionLoading(true);
+      await rejectTrip(trip.id, { rejection_reason: reason.trim() });
+      toast('Trip rejected');
+      setShowReject(false);
+      await reload();
+    } catch (e: any) {
+      // Surface server-side 422 validation nicely
+      const serverMsg =
+        e?.message ||
+        e?.errors?.rejection_reason?.[0] ||
+        'Failed to reject trip';
+      Alert.alert('Error', serverMsg);
+    } finally {
+      setActionLoading(false);
+    }
+  },
+  [trip, reload],
+);
+
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-      >
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator />
       </SafeAreaView>
     );
@@ -221,40 +327,43 @@ export default function TripDetailsScreen() {
           </Text>
 
           <View style={styles.statusPill}>
-            <View
-              style={[styles.statusDot, { backgroundColor: statusColor }]}
-            />
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusText, { color: statusColor }]}>
               {toTitle(trip.status)}
             </Text>
           </View>
 
-          {trip.trip_type ? (
-            <Text style={styles.subtitle}>{trip.trip_type}</Text>
-          ) : null}
+          {trip.trip_type ? <Text style={styles.subtitle}>{trip.trip_type}</Text> : null}
         </View>
-
-        {/* Pending-only header actions */}
-        {isPending ? (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={handleApprove}
-              style={styles.headerBtn}
-              accessibilityLabel="Edit trip"
-            >
-              <Text style={styles.headerBtnText}>Approved This Trip</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
+
+      {/* Pending Approval Action Bar */}
+      {isPendingApproval ? (
+        <View style={[styles.actionBar, shadow(0.05, 8, 3)]}>
+          <Pressable
+            onPress={() => setShowReject(true)}
+            style={[styles.halfBtn, styles.rejectBtn]}
+            android_ripple={{ color: '#fff2' }}
+          >
+            <MaterialIcons name="thumb-down-off-alt" size={18} color="#fff" />
+            <Text style={styles.rejectText}>Reject This Trip</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleApprove}
+            style={[styles.halfBtn, styles.approveBtn]}
+            android_ripple={{ color: '#fff2' }}
+          >
+            <MaterialIcons name="check-circle" size={18} color="#fff" />
+            <Text style={styles.approveText}>Approve This Trip</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Quick info strip */}
       <View style={[styles.quickStrip, shadow(0.05, 8, 3)]}>
         <View style={styles.quickItem}>
           <MaterialIcons name="schedule" size={16} color={PALETTE.text600} />
-          <Text style={styles.quickText}>
-            {trip.departure_time || 'Time not set'}
-          </Text>
+          <Text style={styles.quickText}>{trip.departure_time || 'Time not set'}</Text>
         </View>
         <View style={styles.quickDivider} />
         <View style={styles.quickItem}>
@@ -271,114 +380,52 @@ export default function TripDetailsScreen() {
         <Section title="Basic Trip Information" icon="assignment">
           <Row icon="person" label="Fisherman" value={trip.fisherman?.name} />
           <Row icon="category" label="Trip Type" value={trip.trip_type} />
-          <Row
-            icon="sailing"
-            label="Boat Reg. No."
-            value={trip.boat_registration_no}
-          />
-          <Row
-            icon="directions-boat"
-            label="Boat Name"
-            value={trip.boat_name}
-          />
+          <Row icon="sailing" label="Boat Reg. No." value={trip.boat_registration_no} />
+          <Row icon="directions-boat" label="Boat Name" value={trip.boat_name} />
         </Section>
 
         {/* Location & Schedule */}
         <Section title="Location & Schedule" icon="map">
-          <Row
-            icon="directions-boat"
-            label="Departure Port"
-            value={trip.departure_port}
-          />
-          <Row
-            icon="schedule"
-            label="Departure Time"
-            value={trip.departure_time}
-          />
+          <Row icon="directions-boat" label="Departure Port" value={trip.departure_port} />
+          <Row icon="schedule" label="Departure Time" value={trip.departure_time} />
           <Row icon="public" label="Fishing Zone" value={trip.fishing_zone} />
           <Row icon="place" label="Port Location" value={trip.port_location} />
-          <Row
-            icon="my-location"
-            label="Departure Lat"
-            value={String(trip.departure_lat ?? '—')}
-          />
-          <Row
-            icon="my-location"
-            label="Departure Lng"
-            value={String(trip.departure_lng ?? '—')}
-          />
+          <Row icon="my-location" label="Departure Lat" value={String(trip.departure_lat ?? '—')} />
+          <Row icon="my-location" label="Departure Lng" value={String(trip.departure_lng ?? '—')} />
         </Section>
 
         {/* Safety & Weather */}
         <Section title="Safety & Weather" icon="health-and-safety">
           <Row icon="groups" label="Crew Count" value={n(trip.crew_count)} />
-          <Row
-            icon="contacts"
-            label="Emergency Contact"
-            value={trip.emergency_contact}
-          />
-          <Row
-            icon="medical-services"
-            label="Safety Equipment"
-            value={trip.safety_equipment}
-          />
+          <Row icon="contacts" label="Emergency Contact" value={trip.emergency_contact} />
+          <Row icon="medical-services" label="Safety Equipment" value={trip.safety_equipment} />
           <Row icon="cloud" label="Weather" value={trip.weather} />
-          <Row
-            icon="waves"
-            label="Sea Conditions"
-            value={trip.sea_conditions}
-          />
+          <Row icon="waves" label="Sea Conditions" value={trip.sea_conditions} />
           <Row icon="air" label="Wind Speed" value={n(trip.wind_speed)} />
           <Row icon="opacity" label="Wave Height" value={n(trip.wave_height)} />
         </Section>
 
         {/* Fishing & Costs */}
         <Section title="Fishing & Costs" icon="attach-money">
-          <Row
-            icon="restaurant"
-            label="Target Species"
-            value={trip.target_species}
-          />
-          <Row
-            icon="scale"
-            label="Estimated Catch (kg)"
-            value={n(trip.estimated_catch)}
-          />
-          <Row
-            icon="local-gas-station"
-            label="Fuel Cost"
-            value={currency(trip.fuel_cost)}
-          />
-          <Row
-            icon="build"
-            label="Operational Cost"
-            value={currency(trip.operational_cost)}
-          />
-          <Row
-            icon="summarize"
-            label="Total Cost"
-            value={currency(trip.total_cost)}
-          />
+          <Row icon="restaurant" label="Target Species" value={trip.target_species} />
+          <Row icon="scale" label="Estimated Catch (kg)" value={n(trip.estimated_catch)} />
+          <Row icon="local-gas-station" label="Fuel Cost" value={currency(trip.fuel_cost)} />
+          <Row icon="build" label="Operational Cost" value={currency(trip.operational_cost)} />
+          <Row icon="summarize" label="Total Cost" value={currency(trip.total_cost)} />
         </Section>
 
         {/* Notes */}
         <Section title="Notes" icon="sticky-note-2">
-          <Row
-            value={(trip as any).notes ?? (trip as any).trip_purpose ?? '—'}
-          />
+          <Row value={(trip as any).notes ?? (trip as any).trip_purpose ?? '—'} />
         </Section>
 
         {/* Fish Lots */}
         <Section title="Fish Lots" icon="inventory-2">
           {trip.lots?.length ? (
             <View style={{ gap: 8 }}>
-              {trip.lots.map(l => (
+              {trip.lots.map((l) => (
                 <View key={String(l.id)} style={styles.lotRow}>
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={18}
-                    color={PALETTE.text700}
-                  />
+                  <MaterialIcons name="chevron-right" size={18} color={PALETTE.text700} />
                   <Text style={styles.lotText}>
                     Lot #{l.id} — {toTitle(l.status)}
                     {l.lot_no ? `  (${l.lot_no})` : ''}
@@ -392,7 +439,7 @@ export default function TripDetailsScreen() {
         </Section>
       </ScrollView>
 
-      {/* Modals */}
+      {/* Existing Modals */}
       <CancelTripModal
         visible={showCancel}
         loading={actionLoading}
@@ -404,6 +451,14 @@ export default function TripDetailsScreen() {
         loading={actionLoading}
         onClose={() => setShowComplete(false)}
         onSubmit={handleComplete}
+      />
+
+      {/* NEW: Reject modal */}
+      <RejectTripModal
+        visible={showReject}
+        loading={actionLoading}
+        onClose={() => setShowReject(false)}
+        onSubmit={handleReject}
       />
     </SafeAreaView>
   );
@@ -438,9 +493,7 @@ function Row({
   return (
     <View style={styles.row}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {icon ? (
-          <MaterialIcons name={icon as any} size={16} color={PALETTE.text600} />
-        ) : null}
+        {icon ? <MaterialIcons name={icon as any} size={16} color={PALETTE.text600} /> : null}
         {label ? <Text style={styles.label}>{label}</Text> : null}
       </View>
       <Text style={styles.value}>{value ?? '—'}</Text>
@@ -460,42 +513,31 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontWeight: '800', fontSize: 16 },
   subtitle: { color: '#fff', opacity: 0.9, marginTop: 2, fontSize: 12 },
 
-  bigBtn: {
+  /* Action bar under header (pending approval) */
+  actionBar: {
+    marginTop: 8,
+    marginHorizontal: 14,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 12,
+    padding: 10,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: PRIMARY,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0B3A05',
-        shadowOpacity: 0.22,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: { elevation: 6 },
-    }),
+    gap: 10,
   },
-  bigBtnText: {
-    color: '#fff',
-    fontWeight: '900',
-    fontSize: 16,
-    letterSpacing: 0.2,
-  },
-
   halfBtn: {
     flex: 1,
-    flexDirection: 'row',
+    height: 46,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
     gap: 8,
-    borderRadius: 14,
-    paddingVertical: 12,
   },
-  halfBtnText: { color: '#fff', fontWeight: '800' },
+  approveBtn: { backgroundColor: PRIMARY },
+  rejectBtn: { backgroundColor: DANGER },
+  approveText: { color: '#fff', fontWeight: '800' },
+  rejectText: { color: '#fff', fontWeight: '800' },
 
   statusPill: {
     marginTop: 4,
@@ -508,35 +550,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#fff',
-  },
+  statusDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#fff' },
   statusText: { fontWeight: '800', fontSize: 12 },
-
-  headerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  headerBtnText: { color: PRIMARY, fontWeight: '800', fontSize: 12 },
-
-  headerBtnDanger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: DANGER,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  headerBtnDangerText: { color: '#fff', fontWeight: '800', fontSize: 12 },
 
   quickStrip: {
     marginTop: 8,
@@ -550,18 +565,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  quickItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-  },
-  quickDivider: {
-    width: 1,
-    height: 18,
-    backgroundColor: PALETTE.border,
-    marginHorizontal: 10,
-  },
+  quickItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  quickDivider: { width: 1, height: 18, backgroundColor: PALETTE.border, marginHorizontal: 10 },
   quickText: { color: PALETTE.text900, fontWeight: '700', flexShrink: 1 },
 
   card: {
@@ -602,4 +607,48 @@ const styles = StyleSheet.create({
   },
   lotText: { color: PALETTE.text900, fontWeight: '700' },
   muted: { color: PALETTE.text600 },
+
+  /* Reject Modal styles */
+  kav: { flex: 1, justifyContent: 'center' },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    opacity: 0.25,
+  },
+  modalCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalTitle: { fontWeight: '800', fontSize: 16, color: PALETTE.text900 },
+  modalHint: { color: PALETTE.text600, marginTop: 6, marginBottom: 10 },
+  input: {
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 10,
+    padding: 10,
+    color: PALETTE.text900,
+    backgroundColor: '#FAFAFA',
+  },
+  modalBtnRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  mBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mBtnGhost: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+  },
+  mBtnGhostText: { color: PALETTE.text900, fontWeight: '800' },
+  mBtnDanger: { backgroundColor: DANGER },
+  mBtnDangerText: { color: '#fff', fontWeight: '800' },
 });

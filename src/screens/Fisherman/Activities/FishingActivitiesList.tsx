@@ -274,13 +274,13 @@ function ActivityCard({
         )}m × ${safeNum(item.net_width)}m`}
       />
 
-      <View style={styles.cardActions}>
+      {/* <View style={styles.cardActions}>
         <ActionBtn
           label="View"
           icon="visibility"
           onPress={() => onView(item)}
         />
-      </View>
+      </View> */}
     </View>
   );
 }

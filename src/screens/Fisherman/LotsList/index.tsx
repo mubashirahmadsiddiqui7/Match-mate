@@ -210,7 +210,7 @@ export default function AllLotsScreen() {
             <MaterialIcons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Lots</Text>
+          <Text style={styles.headerTitle}>All Species</Text>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={styles.tinyChip}>
@@ -234,7 +234,7 @@ export default function AllLotsScreen() {
             <TextInput
               value={q}
               onChangeText={setQ}
-              placeholder="Search by lot no, species, port, status…"
+              placeholder="Search by species, port, status…"
               placeholderTextColor="#9CA3AF"
               style={styles.searchInput}
               returnKeyType="search"
@@ -432,7 +432,7 @@ function EmptyState() {
   return (
     <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
       <MaterialIcons name="inventory" size={36} color={TEXT_MUTED} />
-      <Text style={{ color: TEXT_MUTED }}>No lots found.</Text>
+      <Text style={{ color: TEXT_MUTED }}>No Species found.</Text>
       <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
         Pull down to refresh or change filters.
       </Text>

@@ -164,18 +164,18 @@ const FishermanHome = () => {
               iconSource={require('../../assets/images/boatIcon.png')}
               onPress={navAllActivity}
             />
-            <ActionCard
+            {/* <ActionCard
               label="+ Register Boat"
               iconSource={require('../../assets/images/boatIcon.png')}
               onPress={navNewBoats}
-            />
-            <ActionCard
+            /> */}
+            {/* <ActionCard
               label="+ Create Lots"
               iconSource={require('../../assets/images/fishIcon.png')}
               onPress={navCreateLots}
-            />
+            /> */}
             <ActionCard
-              label="All Lots"
+              label="All Species"
               iconSource={require('../../assets/images/fishIcon.png')}
               onPress={navAllLots}
             />
