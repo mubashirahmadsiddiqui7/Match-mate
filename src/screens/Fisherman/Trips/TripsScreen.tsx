@@ -21,14 +21,20 @@ import PALETTE from '../../../theme/palette';
 type TripRow = {
   id: string | number;
   trip_name: string;
-  status: 'pending' | 'approved' | 'active' | 'completed' | 'cancelled';
+  status: 'pending' | 'pending_approval' | 'approved' | 'active' | 'completed' | 'cancelled';
   departure_port?: string | null;
   destination_port?: string | null;
   departure_time?: string | null; // display string e.g. "2025-08-20 08:43 AM"
+  fisherman_name?: string | null;
+  boat_name?: string | null;
+  boat_registration_number?: string | null;
+  trip_type_label?: string | null;
+  created_at?: string | null;
 };
 
 const STATUS_COLORS: Record<TripRow['status'], string> = {
   pending: PALETTE.warn,
+  pending_approval: '#6B7280',
   approved: PALETTE.info,
   active: PALETTE.purple,
   completed: PALETTE.green600,
@@ -96,9 +102,13 @@ export default function TripsScreen() {
 
   const renderItem = ({ item }: { item: TripRow }) => {
     const color = STATUS_COLORS[item.status];
+    const isPending = item.status === 'pending';
+    const isPendingApproval = item.status === 'pending_approval';
+    // const isApproved = item.status === 'approved';
+    const isActive = item.status === 'active';
     return (
       <Pressable
-        onPress={() => navigation.navigate('TripDetails', { id: item.id })}
+        onPress={() => (navigation as any).navigate('TripDetails', { id: item.id })}
         style={({ pressed }) => [styles.card, pressed && { opacity: 0.93 }]}
         accessibilityRole="button"
         accessibilityLabel={`Open trip ${item.trip_name}`}
@@ -122,6 +132,24 @@ export default function TripsScreen() {
           </View>
         </View>
 
+        {/* Info grid row (Fisherman • Boat • Type) */}
+        <View style={styles.infoRow}>
+          <Icon name="person" size={16} color={PALETTE.text600} />
+          <Text style={styles.infoText} numberOfLines={1}>
+            {item.fisherman_name || '—'}
+          </Text>
+          <View style={styles.dot} />
+          <Icon name="directions-boat" size={16} color={PALETTE.text600} />
+          <Text style={styles.infoText} numberOfLines={1}>
+            {item.boat_name || item.boat_registration_number || '—'}
+          </Text>
+          <View style={styles.dot} />
+          <Icon name="category" size={16} color={PALETTE.text600} />
+          <Text style={styles.infoText} numberOfLines={1}>
+            {item.trip_type_label || '—'}
+          </Text>
+        </View>
+
         {/* Route row */}
         <View style={styles.routeRow}>
           <Icon name="place" size={16} color={PALETTE.text600} />
@@ -139,12 +167,54 @@ export default function TripsScreen() {
           </Text>
         </View>
 
-        {/* Footer action (simple, right‑aligned) */}
+        {/* Footer actions: two neat rows */}
         <View style={styles.cardActions}>
-          <View style={styles.openBtn}>
-            <Text style={styles.openBtnText}>Open</Text>
-            <Icon name="chevron-right" size={18} color={PALETTE.text900} />
-          </View>
+          {/* row 1 */}
+          <Pressable
+            onPress={() => (navigation as any).navigate('TripDetails', { id: item.id })}
+            style={[styles.actionBtn, styles.btnGhost]}
+            accessibilityLabel="View"
+          >
+            <Icon name="visibility" size={18} color={PALETTE.text900} />
+            <Text style={styles.btnGhostText}>View</Text>
+          </Pressable>
+
+          {isActive ? (
+            <Pressable
+              onPress={() => (navigation as any).navigate('FishingActivity', { tripId: String(item.trip_name), meta: { id: item.id, trip_id: item.trip_name }, mode: 'create' })}
+              style={[styles.actionBtn, styles.btnInfo]}
+              accessibilityLabel="Add Activity"
+            >
+              <Icon name="set-meal" size={18} color="#fff" />
+              <Text style={styles.btnWhiteText}>Add Activity</Text>
+            </Pressable>
+          ) : null}
+
+          {/* row break */}
+          <View style={{ width: '100%' }} />
+
+          {/* row 2 */}
+          {isActive ? (
+            <Pressable
+              onPress={() => (navigation as any).navigate('TripDetails', { id: item.id })}
+              style={[styles.actionBtn, styles.btnWarn]}
+              accessibilityLabel="Complete Trip"
+            >
+              <Icon name="flag" size={18} color="#212121" />
+              <Text style={styles.btnDarkText}>Complete Trip</Text>
+            </Pressable>
+          ) : null}
+
+          {(isPending || isActive) && !isPendingApproval ? (
+            <Pressable
+              onPress={() => (navigation as any).navigate('Trip', { id: item.id, mode: 'edit' })}
+              style={[styles.actionBtn, styles.btnGhost]}
+              accessibilityLabel="Edit"
+            >
+              <Icon name="edit" size={18} color={PALETTE.text900} />
+              <Text style={styles.btnGhostText}>Edit</Text>
+            </Pressable>
+          ) : null}
         </View>
       </Pressable>
     );
@@ -193,6 +263,7 @@ export default function TripsScreen() {
             [
               'all',
               'pending',
+              'pending_approval',
               'approved',
               'active',
               'completed',
@@ -317,7 +388,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: PALETTE.border,
-    padding: 12,
+    padding: 14,
     ...shadow(0.05, 8, 3),
   },
   cardTop: {
@@ -370,8 +441,10 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: '800' },
 
   cardActions: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     justifyContent: 'flex-end',
   },
   openBtn: {
@@ -387,17 +460,34 @@ const styles = StyleSheet.create({
   },
   openBtnText: { color: PALETTE.text900, fontWeight: '800' },
 
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
+  actionBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   btnGhost: {
     borderColor: PALETTE.border,
     backgroundColor: '#FFFFFF',
   },
   btnGhostText: { color: PALETTE.text900, fontWeight: '800' },
+  btnInfo: { backgroundColor: PALETTE.info, borderColor: PALETTE.info },
+  btnWarn: { backgroundColor: '#FFE082', borderColor: '#FFC107' },
+  btnWhiteText: { color: '#fff', fontWeight: '800' },
+  btnDarkText: { color: '#212121', fontWeight: '800' },
+
+  infoRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  infoText: { color: PALETTE.text700, fontWeight: '700', maxWidth: '28%' },
+  dot: { width: 4, height: 4, borderRadius: 99, backgroundColor: PALETTE.border },
 
   empty: { alignItems: 'center', marginTop: 40, paddingHorizontal: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: PALETTE.text900 },
