@@ -167,7 +167,7 @@ export default function RecordFishSpeciesScreen(): JSX.Element {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 14, gap: 12 }}>
+      <ScrollView contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 40 }}>
         {/* Selected Activity Info */}
         <View style={[styles.infoBanner]}>
           <MaterialIcons name="info" size={16} color={PALETTE.info} />
@@ -432,26 +432,52 @@ const styles = StyleSheet.create({
   /* actions */
   actionsWrap: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 24,
+    marginBottom: 24,
+    paddingHorizontal: 4,
   },
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
-    flexGrow: 1,
+    flex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 56,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800' },
+  primaryBtnText: { 
+    color: '#fff', 
+    fontWeight: '800',
+    fontSize: 16,
+  },
   hollowBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: PALETTE.border,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    minHeight: 56,
+    minWidth: 120,
   },
-  hollowBtnText: { color: PALETTE.text900, fontWeight: '800' },
+  hollowBtnText: { 
+    color: PALETTE.text900, 
+    fontWeight: '800',
+    fontSize: 16,
+  },
 });

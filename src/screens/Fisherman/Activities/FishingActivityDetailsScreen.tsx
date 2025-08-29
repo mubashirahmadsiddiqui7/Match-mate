@@ -271,73 +271,12 @@ export default function FishingActivityDetailsScreen() {
             )}
           </Section>
 
-          {/* Bottom actions (wrap on small screens) */}
-          {/* Bottom actions (wrap on small screens) */}
-          <View className="actionsWrap" style={styles.actionsWrap}>
-            {/* Always show Back */}
-            <Pressable
-              style={[styles.hollowBtn, styles.actionBtn]}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.hollowBtnText}>Back to List</Text>
-            </Pressable>
-
+                    {/* Bottom actions (each button on separate row) */}
+          <View style={styles.actionsWrap}>
             {/* Hide these when completed */}
             {!isCompleted && (
               <>
-                {/* <Pressable
-                  disabled={!data?.id} // disable if we don't have the activity id yet
-                  style={[
-                    styles.primaryBtn,
-                    styles.actionBtn,
-                    { backgroundColor: PALETTE.info },
-                    !data?.id && { opacity: 0.6 },
-                  ]}
-                  onPress={() =>
-                    navigation.navigate('FishingActivity', {
-                      mode: 'edit',
-                      activityId: data!.id, // activity DB id
-                      tripId: String(data?.trip_id ?? ''), // pretty code (required by your type)
-                      meta: {
-                        id: data?.trip_pk ?? String(data?.trip_id ?? ''), // trip DB pk (fallback to trip code)
-                        captain: (data as any)?.captain_name ?? null,
-                        boat: (data as any)?.boat_registration_number ?? null,
-                        trip_id: String(data?.trip_id ?? ''), // pretty code for display
-                      },
-                      // prefill: data, // optional: pass along to speed up initial render
-                    })
-                  }
-                >
-                  <MaterialIcons name="edit" size={18} color="#fff" />
-                  <Text style={styles.primaryBtnText}>Edit Activity</Text>
-                </Pressable> */}
-
-                <Pressable
-                  disabled={completing}
-                  onPress={handleComplete}
-                  style={[
-                    styles.primaryBtn,
-                    styles.actionBtn,
-                    { backgroundColor: PRIMARY },
-                    completing && { opacity: 0.7 },
-                  ]}
-                >
-                  {completing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialIcons
-                        name="check-circle"
-                        size={18}
-                        color="#fff"
-                      />
-                      <Text style={styles.primaryBtnText}>
-                        Complete Activity
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-
+                {/* Add Fish Species - First Row */}
                 <Pressable
                   style={[
                     styles.primaryBtn,
@@ -362,8 +301,45 @@ export default function FishingActivityDetailsScreen() {
                   />
                   <Text style={styles.primaryBtnText}>Add Fish Species</Text>
                 </Pressable>
+
+                {/* Complete Activity - Second Row (only when fish species exist) */}
+                {data?.fish_species && data.fish_species.length > 0 && (
+                  <Pressable
+                    disabled={completing}
+                    onPress={handleComplete}
+                    style={[
+                      styles.primaryBtn,
+                      styles.actionBtn,
+                      { backgroundColor: PRIMARY },
+                      completing && { opacity: 0.7 },
+                    ]}
+                  >
+                    {completing ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <MaterialIcons
+                          name="check-circle"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.primaryBtnText}>
+                          Complete Activity
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
               </>
             )}
+
+            {/* Back to List - Last Row (always visible) */}
+            <Pressable
+              style={[styles.hollowBtn, styles.actionBtn]}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.hollowBtnText}>Back to List</Text>
+            </Pressable>
           </View>
         </ScrollView>
       )}
@@ -451,32 +427,53 @@ const styles = StyleSheet.create({
 
   /* actions */
   actionsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 6,
+    flexDirection: 'column',
+    gap: 16,
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   actionBtn: {
-    flexGrow: 1,
-    minWidth: '48%',
+    width: '100%',
+    minHeight: 56,
   },
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800' },
+  primaryBtnText: { 
+    color: '#fff', 
+    fontWeight: '800',
+    fontSize: 16,
+  },
   hollowBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: PALETTE.border,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  hollowBtnText: { color: PALETTE.text900, fontWeight: '800' },
+  hollowBtnText: { 
+    color: PALETTE.text900, 
+    fontWeight: '800',
+    fontSize: 16,
+  },
 });

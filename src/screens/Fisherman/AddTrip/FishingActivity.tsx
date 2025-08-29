@@ -372,26 +372,7 @@ export default function FishingActivity() {
             </Text>
             <View style={s.rowBetween}>
               <KV label="Trip ID" value={displayTripCode} />
-              <KV
-                label="Boat "
-                value={meta?.boat ? String(meta.boat) : 'N/A'}
-              />
-              <KV
-                label="Captain"
-                value={meta?.captain ? String(meta.captain) : 'N/A'}
-              />
-            </View>
-            <View>
-              <Text
-                style={{
-                  color: '#64748B',
-                  alignSelf: 'center',
-                  fontSize: 12,
-                  paddingBottom: 5,
-                }}
-              >
-                Status
-              </Text>
+
               <Badge text="Active" />
             </View>
 
