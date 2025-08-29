@@ -193,7 +193,7 @@ export default function BoatsListScreen() {
 
           <Pressable
             style={[styles.actionBtn, styles.btnGhost]}
-            onPress={() => navigation.navigate('EditBoat' as never, { boatId: item.id } as never)}
+            onPress={() => navigation.navigate('EditBoat', { boatId: item.id })}
           >
             <Icon name="edit" size={16} color={PALETTE.text900} />
             <Text style={styles.btnGhostText}>Edit</Text>

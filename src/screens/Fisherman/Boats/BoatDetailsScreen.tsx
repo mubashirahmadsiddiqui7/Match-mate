@@ -49,7 +49,7 @@ export default function BoatDetailsScreen() {
   };
 
   const handleEdit = () => {
-    navigation.navigate('EditBoat' as never, { boatId } as never);
+    navigation.navigate('EditBoat', { boatId });
   };
 
   const handleDelete = () => {
