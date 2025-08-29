@@ -1,360 +1,552 @@
 // src/screens/Fisherman/Boats/BoatsListScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  SafeAreaView,
   FlatList,
-  TouchableOpacity,
-  Image,
-  RefreshControl,
+  Pressable,
+  TextInput,
   ActivityIndicator,
-  Alert,
+  StatusBar,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import Toast from 'react-native-toast-message';
 import PALETTE from '../../../theme/palette';
 import { getBoats, Boat } from '../../../services/boat';
 
 export default function BoatsListScreen() {
   const navigation = useNavigation();
   const [boats, setBoats] = useState<Boat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'maintenance' | 'retired'>('all');
 
-  useEffect(() => {
-    fetchBoats();
-  }, []);
-
-  const fetchBoats = async (pageNum: number = 1, refresh: boolean = false) => {
+  const fetchBoats = useCallback(async (pageNum: number = 1, refresh: boolean = false) => {
     try {
-      if (refresh) {
-        setPage(1);
-        setHasMore(true);
-      }
-
       const response = await getBoats(pageNum, 10);
       
-      if (refresh) {
-        setBoats(response.data);
-      } else {
-        setBoats(prev => [...prev, ...response.data]);
+      // Check if response.data.data exists and is an array (nested structure)
+      if (!response || !response.data || !response.data.data || !Array.isArray(response.data.data)) {
+        console.error('Invalid response format:', response);
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Invalid response format from server',
+        });
+        return;
       }
       
-      setHasMore(response.data.length === 10);
+      if (refresh) {
+        setBoats(response.data.data);
+      } else {
+        setBoats(prev => [...prev, ...response.data.data]);
+      }
+      
+      setHasMore(response.data.data.length === 10);
       setPage(pageNum);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to fetch boats');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
+      console.error('Error fetching boats:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error.message || 'Failed to fetch boats',
+      });
     }
-  };
+  }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
+  useEffect(() => {
     fetchBoats(1, true);
-  };
+  }, [fetchBoats]);
 
-  const loadMore = () => {
-    if (hasMore && !loadingMore) {
-      setLoadingMore(true);
-      fetchBoats(page + 1);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchBoats(1, true);
+    setRefreshing(false);
+  }, [fetchBoats]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      fetchBoats(page + 1, false);
     }
+  }, [loading, hasMore, page, fetchBoats]);
+
+  const handleBack = () => {
+    navigation.navigate('FishermanHome' as never);
   };
 
-  const renderBoatItem = ({ item }: { item: Boat }) => (
-    <TouchableOpacity
-      style={styles.boatCard}
-      onPress={() => navigation.navigate('BoatDetails' as never, { boatId: item.id } as never)}
-    >
-      <View style={styles.boatImageContainer}>
-        {item.photos && item.photos.length > 0 ? (
-          <Image source={{ uri: item.photos[0] }} style={styles.boatImage} />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Icon name="directions-boat" size={40} color={PALETTE.text500} />
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.boatInfo}>
-        <Text style={styles.boatName}>{item.name}</Text>
-        <Text style={styles.boatRegistration}>Reg: {item.registration_number}</Text>
-        <Text style={styles.boatType}>{item.type}</Text>
-        
-        <View style={styles.boatSpecs}>
-          <View style={styles.specItem}>
-            <Icon name="straighten" size={16} color={PALETTE.text500} />
-            <Text style={styles.specText}>{item.length}m × {item.width}m</Text>
-          </View>
-          
-          <View style={styles.specItem}>
-            <Icon name="scale" size={16} color={PALETTE.text500} />
-            <Text style={styles.specText}>{item.tonnage} tons</Text>
-          </View>
-          
-          <View style={styles.specItem}>
-            <Icon name="engineering" size={16} color={PALETTE.text500} />
-            <Text style={styles.specText}>{item.engine_power}</Text>
-          </View>
-        </View>
-      </View>
-      
-      <View style={styles.boatActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('BoatDetails' as never, { boatId: item.id } as never)}
-        >
-          <Icon name="visibility" size={20} color={PALETTE.green700} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('EditBoat' as never, { boatId: item.id } as never)}
-        >
-          <Icon name="edit" size={20} color={PALETTE.blue700} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
+  const filteredBoats = boats.filter(boat => {
+    const matchesSearch = search.trim() === '' || 
+      boat.name?.toLowerCase().includes(search.toLowerCase()) ||
+      boat.registration_number.toLowerCase().includes(search.toLowerCase()) ||
+      boat.type?.toLowerCase().includes(search.toLowerCase()) ||
+      boat.home_port?.toLowerCase().includes(search.toLowerCase());
     
-    return (
-      <View style={styles.loadingFooter}>
-        <ActivityIndicator size="small" color={PALETTE.green700} />
-        <Text style={styles.loadingText}>Loading more boats...</Text>
-      </View>
-    );
-  };
+    const matchesStatus = statusFilter === 'all' || boat.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
-  if (loading) {
+  const renderBoatItem = ({ item }: { item: Boat }) => {
+    const isActive = item.status === 'active';
+    const isMaintenance = item.status === 'maintenance';
+    const isRetired = item.status === 'retired';
+
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={PALETTE.green700} />
-          <Text style={styles.loadingText}>Loading boats...</Text>
+      <Pressable
+        style={styles.card}
+        onPress={() => navigation.navigate('BoatDetails', { boatId: item.id })}
+      >
+        {/* Card Header */}
+        <View style={styles.cardTop}>
+          <View style={styles.cardTitleContainer}>
+            <Text style={styles.cardTitle}>
+              {item.name || 'Unnamed Boat'}
+            </Text>
+            <Text style={styles.cardSubtitle}>
+              {item.registration_number}
+            </Text>
+          </View>
+          
+          <View style={[
+            styles.badge,
+            { 
+              backgroundColor: isActive ? PALETTE.green50 : 
+                             isMaintenance ? PALETTE.warn + '20' : 
+                             PALETTE.error + '20',
+              borderColor: isActive ? PALETTE.green600 : 
+                          isMaintenance ? PALETTE.warn : 
+                          PALETTE.error
+            }
+          ]}>
+            <View style={[
+              styles.badgeDot,
+              { 
+                backgroundColor: isActive ? PALETTE.green600 : 
+                               isMaintenance ? PALETTE.warn : 
+                               PALETTE.error
+              }
+            ]} />
+            <Text style={[
+              styles.badgeText,
+              { 
+                color: isActive ? PALETTE.green700 : 
+                       isMaintenance ? PALETTE.warn : 
+                       PALETTE.error
+              }
+            ]}>
+              {item.status}
+            </Text>
+          </View>
         </View>
-      </SafeAreaView>
-    );
-  }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-back" size={24} color={PALETTE.text900} />
-        </TouchableOpacity>
-        
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>All Boats</Text>
-          <Text style={styles.headerSubtitle}>
-            {boats.length} boat{boats.length !== 1 ? 's' : ''} registered
+        {/* Boat Details */}
+        <View style={styles.infoRow}>
+          <Text style={styles.infoText}>
+            <Icon name="category" size={14} color={PALETTE.text600} />
+            {' '}{item.type || 'N/A'}
+          </Text>
+          <View style={styles.dot} />
+          <Text style={styles.infoText}>
+            <Icon name="straighten" size={14} color={PALETTE.text600} />
+            {' '}{item.length_m ? `${item.length_m}m` : 'N/A'}
+          </Text>
+          <View style={styles.dot} />
+          <Text style={styles.infoText}>
+            <Icon name="people" size={14} color={PALETTE.text600} />
+            {' '}{item.capacity_crew || 'N/A'}
           </Text>
         </View>
-        
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('AddBoat' as never)}
-        >
-          <Icon name="add" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
 
-      <FlatList
-        data={boats}
-        renderItem={renderBoatItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.1}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="directions-boat" size={64} color={PALETTE.text400} />
-            <Text style={styles.emptyTitle}>No Boats Found</Text>
-            <Text style={styles.emptySubtitle}>
-              Start by registering your first boat
+        <View style={styles.infoRow}>
+          <Text style={styles.infoText}>
+            <Icon name="location-on" size={14} color={PALETTE.text600} />
+            {' '}{item.home_port || 'N/A'}
+          </Text>
+          <View style={styles.dot} />
+          <Text style={styles.infoText}>
+            <Icon name="engineering" size={14} color={PALETTE.text600} />
+            {' '}{item.engine_power || 'N/A'}
+          </Text>
+          <View style={styles.dot} />
+          <Text style={styles.infoText}>
+            <Icon name="calendar-today" size={14} color={PALETTE.text600} />
+            {' '}{item.year_built || 'N/A'}
+          </Text>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.cardActions}>
+          <Pressable
+            style={styles.openBtn}
+            onPress={() => navigation.navigate('BoatDetails', { boatId: item.id })}
+          >
+            <Icon name="visibility" size={16} color={PALETTE.text900} />
+            <Text style={styles.openBtnText}>View</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.actionBtn, styles.btnGhost]}
+            onPress={() => navigation.navigate('EditBoat' as never, { boatId: item.id } as never)}
+          >
+            <Icon name="edit" size={16} color={PALETTE.text900} />
+            <Text style={styles.btnGhostText}>Edit</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.surface }}>
+      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+
+      <View style={styles.screen}>
+        {/* Header */}
+        <View style={styles.hero}>
+          <Pressable
+            onPress={handleBack}
+            style={({ pressed }) => [
+              styles.backBtn,
+              pressed && { opacity: 0.85 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Icon name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          <View style={styles.heroBody}>
+            <Text style={styles.heroTitle}>All Boats</Text>
+            <Text style={styles.heroSub}>
+              {loading ? 'Loading…' : `Total: ${filteredBoats.length}`}
             </Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => navigation.navigate('AddBoat' as never)}
-            >
-              <Text style={styles.emptyButtonText}>Register Boat</Text>
-            </TouchableOpacity>
           </View>
-        }
-      />
+          
+          <Pressable
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && { opacity: 0.85 },
+            ]}
+            onPress={() => navigation.navigate('BoatRegister' as never)}
+            accessibilityRole="button"
+            accessibilityLabel="Add new boat"
+          >
+            <Icon name="add" size={24} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchRow}>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by name, registration, type, port…"
+            placeholderTextColor="#9CA3AF"
+            style={styles.searchInput}
+          />
+        </View>
+
+        {/* Filter chips */}
+        <View style={styles.chipsRow}>
+          {(['all', 'active', 'maintenance', 'retired'] as const).map(status => (
+            <Pressable
+              key={status}
+              onPress={() => setStatusFilter(status)}
+              style={({ pressed }) => [
+                styles.chip,
+                statusFilter === status && styles.chipActive,
+                pressed && { opacity: 0.9 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter ${status}`}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  statusFilter === status && styles.chipTextActive,
+                ]}
+              >
+                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Boats List */}
+        <FlatList
+          data={filteredBoats}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderBoatItem}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.1}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              {loading ? (
+                <ActivityIndicator size="large" color={PALETTE.green700} />
+              ) : (
+                <>
+                  <Text style={styles.emptyTitle}>No boats found</Text>
+                  <Text style={styles.emptySub}>
+                    Try changing filters or search terms.
+                  </Text>
+                </>
+              )}
+            </View>
+          }
+          ListFooterComponent={
+            hasMore && boats.length > 0 ? (
+              <View style={styles.loadingMore}>
+                <ActivityIndicator size="small" color={PALETTE.green700} />
+                <Text style={styles.loadingMoreText}>Loading more boats...</Text>
+              </View>
+            ) : null
+          }
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: PALETTE.surface,
   },
-  header: {
+  hero: {
+    backgroundColor: PALETTE.green700,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: PALETTE.border,
+    gap: 12,
   },
-  backButton: {
+  backBtn: {
     padding: 8,
+    borderRadius: 8,
   },
-  headerContent: {
+  heroBody: {
     flex: 1,
-    marginLeft: 8,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: PALETTE.text900,
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
-  headerSubtitle: {
+  heroSub: {
     fontSize: 14,
-    color: PALETTE.text500,
+    color: '#E5E7EB',
     marginTop: 2,
   },
   addButton: {
-    backgroundColor: PALETTE.green700,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 20,
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  listContainer: {
-    padding: 16,
+  searchRow: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  boatCard: {
-    backgroundColor: '#fff',
+  searchInput: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    marginBottom: 16,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    color: PALETTE.text900,
+  },
+  chipsRow: {
     flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingHorizontal: 16,
+    flexWrap: 'wrap',
   },
-  boatImageContainer: {
-    marginRight: 16,
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
   },
-  boatImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+  chipActive: {
+    backgroundColor: PALETTE.green50,
+    borderColor: PALETTE.green600,
   },
-  placeholderImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    backgroundColor: PALETTE.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  boatInfo: {
-    flex: 1,
-  },
-  boatName: {
-    fontSize: 18,
+  chipText: { 
+    color: PALETTE.text700, 
     fontWeight: '700',
+    fontSize: 14,
+  },
+  chipTextActive: { 
+    color: PALETTE.green700,
+    fontWeight: '800',
+  },
+  card: {
+    backgroundColor: PALETTE.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    padding: 16,
+    marginHorizontal: 16,
+    ...shadow(0.05, 8, 3),
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  cardTitleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
     color: PALETTE.text900,
     marginBottom: 4,
   },
-  boatRegistration: {
+  cardSubtitle: {
     fontSize: 14,
     color: PALETTE.text600,
-    marginBottom: 4,
-  },
-  boatType: {
-    fontSize: 14,
-    color: PALETTE.green700,
     fontWeight: '600',
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+  badgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  badgeText: { 
+    fontSize: 12, 
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  infoRow: {
     marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  boatSpecs: {
-    gap: 4,
+  infoText: { 
+    color: PALETTE.text700, 
+    fontWeight: '600', 
+    fontSize: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  specItem: {
+  dot: { 
+    width: 4, 
+    height: 4, 
+    borderRadius: 99, 
+    backgroundColor: PALETTE.border 
+  },
+  cardActions: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  openBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
+  },
+  openBtnText: { 
+    color: PALETTE.text900, 
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  actionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  specText: {
-    fontSize: 12,
-    color: PALETTE.text500,
+  btnGhost: {
+    borderColor: PALETTE.border,
+    backgroundColor: '#FFFFFF',
   },
-  boatActions: {
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: PALETTE.surface,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingFooter: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  loadingText: {
-    color: PALETTE.text500,
+  btnGhostText: { 
+    color: PALETTE.text900, 
+    fontWeight: '700',
     fontSize: 14,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
+  empty: { 
+    alignItems: 'center', 
+    marginTop: 40, 
+    paddingHorizontal: 20 
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+  emptyTitle: { 
+    fontSize: 18, 
+    fontWeight: '800', 
     color: PALETTE.text900,
-    marginTop: 16,
     marginBottom: 8,
   },
-  emptySubtitle: {
-    fontSize: 16,
-    color: PALETTE.text500,
+  emptySub: { 
+    color: PALETTE.text600, 
     textAlign: 'center',
-    marginBottom: 24,
+    fontSize: 14,
   },
-  emptyButton: {
-    backgroundColor: PALETTE.green700,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+  loadingMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
   },
-  emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  loadingMoreText: {
+    color: PALETTE.text600,
+    fontSize: 14,
     fontWeight: '600',
   },
 });
+
+/* ---- shadow helper ---- */
+function shadow(opacity: number, radius: number, height: number) {
+  if (Platform.OS === 'android') return { elevation: 2 };
+  return {
+    shadowColor: '#000',
+    shadowOpacity: opacity,
+    shadowRadius: radius,
+    shadowOffset: { width: 0, height },
+  };
+}

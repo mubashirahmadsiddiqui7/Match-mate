@@ -9,13 +9,13 @@ export interface Boat {
   boat_type?: string | null;
   boat_license_no?: string | null;
   mfd_approved_no?: string | null;
-  length_m?: number | null;
-  width_m?: number | null;
+  length_m?: string | null;
+  width_m?: string | null;
   capacity_crew?: number | null;
   capacity_weight_kg?: number | null;
   number_of_fish_holds?: number | null;
-  boat_size?: number | null;
-  boat_capacity?: number | null;
+  boat_size?: string | null;
+  boat_capacity?: string | null;
   engine_power?: string | null;
   year_built?: number | null;
   fishing_equipment?: string | null;
@@ -25,9 +25,57 @@ export interface Boat {
   notes?: string | null;
   home_port?: string | null;
   status: 'active' | 'maintenance' | 'retired';
-  photos?: string[];
+  documents?: any | null;
   created_at: string;
   updated_at: string;
+  owner_id?: number;
+  user_id?: number;
+  owner?: {
+    id: number;
+    name: string;
+    email: string;
+    email_verified_at?: string | null;
+    user_type: string;
+    role: string;
+    first_name: string;
+    last_name: string;
+    middle_name?: string | null;
+    date_of_birth?: string | null;
+    gender?: string | null;
+    nationality?: string | null;
+    phone: string;
+    address?: string | null;
+    city?: string | null;
+    province?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+    boat_registration_number?: string | null;
+    fishing_zone: string;
+    port_location: string;
+    fcs_license_number?: string | null;
+    export_license_number?: string | null;
+    mfd_employee_id?: string | null;
+    company_name?: string | null;
+    company_id?: string | null;
+    business_address?: string | null;
+    business_phone?: string | null;
+    business_email?: string | null;
+    is_verified: boolean;
+    verified_at?: string | null;
+    verification_status: string;
+    verification_document?: string | null;
+    profile_description?: string | null;
+    bio?: string | null;
+    website?: string | null;
+    profile_picture?: string | null;
+    cover_picture?: string | null;
+    phone_verified_at?: string | null;
+    last_login_at?: string | null;
+    is_active: boolean;
+    preferences?: any | null;
+    created_at: string;
+    updated_at: string;
+  };
 }
 
 export interface CreateBoatData {
@@ -65,11 +113,26 @@ export interface UpdateBoatData extends Partial<CreateBoatData> {
 }
 
 export interface BoatListResponse {
-  data: Boat[];
-  total: number;
-  page: number;
-  per_page: number;
-  last_page: number;
+  success: boolean;
+  data: {
+    current_page: number;
+    data: Boat[];
+    first_page_url: string;
+    from: number;
+    last_page: number;
+    last_page_url: string;
+    links: Array<{
+      url: string | null;
+      label: string;
+      active: boolean;
+    }>;
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
+    to: number;
+    total: number;
+  };
 }
 
 const appendIfPresent = (fd: FormData, key: string, val?: any) => {
@@ -88,7 +151,16 @@ export const getBoats = async (page: number = 1, perPage: number = 10): Promise<
 // Get boat by ID
 export const getBoatById = async (id: number): Promise<Boat> => {
   const res = await api(`/boats/${id}`, { method: 'GET' });
-  return res;
+  console.log('Raw API response for boat', id, ':', JSON.stringify(res, null, 2));
+  
+  // Handle the API response structure: { success: true, data: { boat data } }
+  if (res && res.data) {
+    console.log('Extracted boat data:', JSON.stringify(res.data, null, 2));
+    return res.data;
+  }
+  
+  console.error('Invalid response format:', res);
+  throw new Error('Invalid response format from server');
 };
 
 // Create new boat
