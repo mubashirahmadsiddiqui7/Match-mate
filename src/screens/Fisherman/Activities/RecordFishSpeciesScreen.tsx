@@ -18,6 +18,8 @@ import Toast from 'react-native-toast-message';
 
 import PALETTE from '../../../theme/palette';
 import { createFishSpecies } from '../../../services/fishSpecies';
+import { isOnline } from '../../../offline/net';
+import { enqueueCreateSpecies } from '../../../offline/TripQueues';
 
 type Params = {
   activityId: number | string;
@@ -73,6 +75,42 @@ export default function RecordFishSpeciesScreen(): JSX.Element {
         text1: 'Missing info',
         text2: 'Species, Type and Quantity (kg) are required.',
         position: 'top',
+      });
+      return;
+    }
+    const online = await isOnline();
+    const speciesBody = {
+      activity_code: activityCode ?? undefined,
+      trip_code: tripCode ?? undefined,
+      species_name: species.trim(),
+      quantity_kg: Number(qty),
+      type: type as 'catch' | 'discard',
+      grade: grade.trim() ? grade.trim() : null,
+      notes: notes.trim() ? notes.trim() : null,
+    };
+
+    if (!online) {
+      // activityId could be local (string) or server (number)
+      const activityServerId =
+        typeof activityId === 'number' ? activityId : undefined;
+      const activityLocalId =
+        typeof activityId === 'string' ? String(activityId) : undefined;
+
+      await enqueueCreateSpecies(speciesBody as any, {
+        activityServerId,
+        activityLocalId,
+      });
+      Toast.show({
+        type: 'success',
+        text1: 'Saved Offline 🎉',
+        text2: 'Species will sync later.',
+        position: 'top',
+      });
+      // Go back to details (it will show pending list)
+      // @ts-ignore
+      navigation.replace('FishingActivityDetails', {
+        activityId,
+        tripId: tripCode,
       });
       return;
     }

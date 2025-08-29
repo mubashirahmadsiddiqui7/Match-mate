@@ -45,7 +45,7 @@ import {
 } from '../../../services/trips';
 import type { RouteProp } from '@react-navigation/native';
 import { isOnline } from '../../../offline/net';
-import { enqueueTrip, processQueue } from '../../../offline/TripQueues';
+import { enqueueStartTrip, enqueueTrip, processQueue } from '../../../offline/TripQueues';
 import Toast from 'react-native-toast-message';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../../redux/store';
@@ -456,16 +456,30 @@ export default function AddTripScreen() {
 
       const online = await isOnline();
 
+      // if (!online) {
+      //   const job = await enqueueTrip(body as any); // now returns job with localId
+
+      //   // await enqueueTrip(body as any);
+      //   Toast.show({
+      //     type: 'success',
+      //     text1: 'Trip Saved Offline 🎉',
+      //     text2: 'Trip moved to upload queue and will auto-submit when online.',
+      //     position: 'bottom', // or 'top'
+      //     visibilityTime: 3000,
+      //   });
+      //   navigation.navigate('OfflineTrips');
+      //   return;
+      // }
+      // inside onSaveCreate(), offline branch:
       if (!online) {
-        await enqueueTrip(body as any);
+        const job = await enqueueTrip(body as any); // now returns job with localId
+        setCreatedTrip({ id: job.localId, trip_id: tripId }); // store local id so Start can depend on it
         Toast.show({
           type: 'success',
           text1: 'Trip Saved Offline 🎉',
-          text2: 'Trip moved to upload queue and will auto-submit when online.',
-          position: 'bottom', // or 'top'
-          visibilityTime: 3000,
+          text2: 'Will auto-upload when online.',
         });
-        navigation.navigate('OfflineTrips');
+        // DON'T navigate away; let them press Start (and we’ll queue that too)
         return;
       }
 
@@ -646,48 +660,67 @@ export default function AddTripScreen() {
     ? serverTrip?.trip_name ?? serverTrip?.id ?? ''
     : tripId;
 
-  const handleStart = useCallback(async () => {
-    // Resolve primary key (DB id) and human-readable trip code
-    const pk = createdTrip?.id ?? serverTrip?.id; // e.g., 8
-    const tripCode =
-      createdTrip?.trip_id ??
-      serverTrip?.trip_name ??
-      (pk != null ? String(pk) : undefined);
+// handleStart (replace your current impl)
+const handleStart = useCallback(async () => {
+  const online = await isOnline();
 
-    if (pk == null) return; // nothing to start
+  // pk can be a server id (number) or a localId string (when saved offline)
+  const pk = createdTrip?.id ?? serverTrip?.id;
+  const tripCode =
+    createdTrip?.trip_id ??
+    serverTrip?.trip_name ??
+    (pk != null ? String(pk) : undefined);
 
-    try {
-      setActionLoading(true);
-      await startTrip(pk);
+  try {
+    setActionLoading(true);
 
-      const captain =
-        (createdTrip as any)?.captain_name ??
-        (serverTrip as any)?.captain_name ??
-        methods.getValues('captainNameId') ??
-        null;
-
-      const boat =
-        serverTrip?.boat_registration_no ??
-        (createdTrip as any)?.boat_registration_number ??
-        methods.getValues('boatNameId') ??
-        null;
-
-      navigation.navigate('FishingActivity', {
-        tripId: tripCode ?? pk, // UI code preferred; fallback to pk
-        activityNo: 1,
-        meta: {
-          id: pk, // <-- use this for API (exists:trips,id)
-          trip_id: tripCode ?? pk, // display code
-          captain,
-          boat,
-        },
+    if (online) {
+      // server id must be a number to call API directly
+      if (typeof pk === 'number') {
+        await startTrip(pk);
+      } else {
+        // created offline but now online: just queue start bound to the create localId
+        await enqueueStartTrip({ dependsOnLocalId: String(pk) });
+        processQueue();
+      }
+    } else {
+      // offline: enqueue start; it depends on create if pk is local
+      if (typeof pk === 'number') {
+        await enqueueStartTrip({ serverId: pk });
+      } else {
+        await enqueueStartTrip({ dependsOnLocalId: String(pk) });
+      }
+      Toast.show({
+        type: 'info',
+        text1: 'Starting offline',
+        text2: 'Trip will be marked Active when back online.',
       });
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to start trip');
-    } finally {
-      setActionLoading(false);
     }
-  }, [createdTrip, serverTrip, methods, navigation]);
+
+    // local-first: go ahead to FishingActivity
+    const captain =
+      (createdTrip as any)?.captain_name ??
+      (serverTrip as any)?.captain_name ??
+      methods.getValues('captainNameId') ??
+      null;
+
+    const boat =
+      serverTrip?.boat_registration_no ??
+      (createdTrip as any)?.boat_registration_number ??
+      methods.getValues('boatNameId') ??
+      null;
+
+    navigation.navigate('FishingActivity', {
+      tripId: tripCode ?? pk,
+      activityNo: 1,
+      meta: { id: pk, trip_id: tripCode ?? pk, captain, boat },
+    });
+  } catch (e: any) {
+    Alert.alert('Error', e?.message || 'Failed to start trip');
+  } finally {
+    setActionLoading(false);
+  }
+}, [createdTrip, serverTrip, methods, navigation]);
 
   const isLocked = !isEdit && !!createdTrip?.id;
 

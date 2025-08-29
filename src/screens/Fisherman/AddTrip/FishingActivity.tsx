@@ -31,6 +31,8 @@ import {
   getFishingActivityById,
   type CreateFishingActivityBody,
 } from '../../../services/fishingActivity';
+import { isOnline } from '../../../offline/net';
+import { enqueueCreateActivity } from '../../../offline/TripQueues';
 
 type Nav = NativeStackNavigationProp<
   FishermanStackParamList,
@@ -215,6 +217,8 @@ export default function FishingActivity() {
   }
 
   async function onSubmit() {
+    const online = await isOnline();
+
     const err = validate();
     if (err) {
       Alert.alert('Missing info', err);
@@ -243,6 +247,49 @@ export default function FishingActivity() {
           gps_latitude: lat != null ? Number(lat) : null,
           gps_longitude: lng != null ? Number(lng) : null,
         };
+      if (!online) {
+        // If meta.id is string => could be a localId of trip; pass as dependency
+        const tripServerId =
+          typeof tripPkForApi === 'number' ? tripPkForApi : undefined;
+        const tripLocalId =
+          typeof tripPkForApi === 'string' ? String(tripPkForApi) : undefined;
+
+        const job = await enqueueCreateActivity(body as any, {
+          tripServerId,
+          tripLocalId,
+        });
+
+        Toast.show({
+          type: 'success',
+          text1: 'Saved Offline 🎉',
+          text2: 'Activity will sync when online.',
+          position: 'top',
+        });
+
+        // Navigate to details with a local fallback
+        navigation.replace('FishingActivityDetails', {
+          activityId: job.localId, // local placeholder id
+          fallback: {
+            id: job.localId,
+            activity_id: `ACT-${job.localId.slice(-6).toUpperCase()}`,
+            activity_number: body.activity_number,
+            time_of_netting: body.time_of_netting,
+            time_of_hauling: body.time_of_hauling,
+            mesh_size: body.mesh_size,
+            net_length: body.net_length,
+            net_width: body.net_width,
+            gps_latitude: body.gps_latitude,
+            gps_longitude: body.gps_longitude,
+            trip_id: body.trip_code ?? displayTripCode,
+            status: 'pending-sync',
+            status_label: 'Pending Sync',
+            trip_pk: tripServerId ?? undefined,
+          },
+          tripId: displayTripCode,
+        });
+
+        return;
+      }
 
       if (mode === 'edit' && activityId != null) {
         const updated = await updateFishingActivity(activityId, body);
@@ -335,7 +382,16 @@ export default function FishingActivity() {
               />
             </View>
             <View>
-              <Text style={{color:"#64748B", alignSelf:'center', fontSize:12, paddingBottom:5}}>Status</Text>
+              <Text
+                style={{
+                  color: '#64748B',
+                  alignSelf: 'center',
+                  fontSize: 12,
+                  paddingBottom: 5,
+                }}
+              >
+                Status
+              </Text>
               <Badge text="Active" />
             </View>
 
@@ -449,6 +505,7 @@ export default function FishingActivity() {
                   }
                   keyboardType="decimal-pad"
                   placeholder="e.g., 100.5"
+                  placeholderTextColor={'#94A3B8'}
                   style={s.input}
                 />
               </View>
@@ -460,6 +517,7 @@ export default function FishingActivity() {
                     setValue('netWid', t.replace(/[^0-9.]/g, ''))
                   }
                   keyboardType="decimal-pad"
+                  placeholderTextColor={'#94A3B8'}
                   placeholder="e.g., 8"
                   style={s.input}
                 />

@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -23,6 +23,8 @@ import PALETTE from '../../../theme/palette';
 import Toast from 'react-native-toast-message';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../../redux/store';
 
 type Nav = NativeStackNavigationProp<
   FishermanStackParamList,
@@ -74,6 +76,13 @@ export default function FishingActivityDetailsScreen() {
   const { params } = useRoute<any>();
   const { activityId, fallback, tripId }: Params = params || {};
   const [completing, setCompleting] = useState(false);
+   const auth = useSelector((s: RootState) => (s as any).auth);
+  const authUser = auth?.user;
+  console.log('AuthUser in FishermanHome:', authUser);
+  const profile = useMemo(
+    () => authUser?.profile ?? authUser ?? {},
+    [authUser],
+  );
 
   const [data, setData] = useState<FishingActivityDetails | null>(
     fallback ?? null,
@@ -97,6 +106,7 @@ export default function FishingActivityDetailsScreen() {
         position: 'top',
       });
       await load(); // refresh UI with updated status
+      navigation.replace('AllTrip');
     } catch (e: any) {
       Toast.show({
         type: 'error',
@@ -217,7 +227,7 @@ export default function FishingActivityDetailsScreen() {
 
             <Row
               label="Fisherman ID"
-              value={n(data?.trip_fisherman_id ?? data?.fisherman_id)}
+              value={n(data?.trip_fisherman_id ?? data?.fisherman_id ?? profile.fisherman_id)}
             />
           </Section>
 
@@ -448,7 +458,7 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flexGrow: 1,
-    minWidth: '48%', // becomes full-width automatically on small screens due to wrapping
+    minWidth: '48%',
   },
   primaryBtn: {
     flexDirection: 'row',
