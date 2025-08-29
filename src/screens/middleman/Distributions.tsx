@@ -283,6 +283,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 20,
   },
+  filterBtnText:{
+    fontWeight:'bold',
+    color:'#fff'
+  },
   flatlistContainer: {
     backgroundColor: '#fff',
     padding: 15,
@@ -301,7 +305,7 @@ const styles = StyleSheet.create({
     color: '#222',
   },
   itemContainer: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f4f8f4',
     padding: 15,
     borderRadius: 12,
     borderWidth: 1,
