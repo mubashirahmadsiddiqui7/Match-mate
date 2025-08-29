@@ -124,7 +124,7 @@ export default function MiddleManHome() {
       <View style={styles.quickRow}>
         <QuickButton label="Purchases" onPress={() => navigation.navigate('lotDetails')} icon="$" />
         <QuickButton label="Distributions" onPress={() => navigation.navigate('Distributions')} icon="🐠" />
-        <QuickButton label="Assignments" onPress={() => navigation.navigate('MiddleManHome')} icon="🏢" />
+        <QuickButton label="Assignments" onPress={() => navigation.navigate('Assignments')} icon="🏢" />
       </View>
 
       {/* Search */}

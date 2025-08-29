@@ -5,12 +5,14 @@ import MiddleManHome from '../../../screens/middleman/MiddleManHome';
 import LotDetails from '../../../screens/middleman/lotDetails';
 import Distributions from '../../../screens/middleman/Distributions';
 import distributionDetails from '../../../screens/middleman/distributionDetails';
+import Assignments from '../../../screens/middleman/Assignments'
 
 export type MiddleManStackParamList = {
   MiddleManHome: undefined;
   lotDetails: { id: number | string };
   Distributions: { id: number | string };
   distributionDetails:undefined;
+  Assignments:undefined;
 };
 
 const Stack = createNativeStackNavigator<MiddleManStackParamList>();
@@ -33,6 +35,11 @@ export default function MiddleManStack() {
       name="distributionDetails"
       component={distributionDetails}
       options={{headerShown:true, title: 'Distribution Details'}}
+      />
+      <Stack.Screen 
+      name="Assignments"
+      component={Assignments}
+      options={{headerShown:true, title: 'Assignments Screen'}}
       />
     </Stack.Navigator>
   );
