@@ -722,6 +722,7 @@ export type TripRowDTO = {
   boat_registration_number?: string | null;
   trip_type_label?: string | null;
   created_at?: string | null; // display friendly
+  fishing_activity_count?: number | null;
 };
 export async function listTripsPage(params?: { page?: number; per_page?: number; }) {
   const page = params?.page ?? 1;
@@ -741,6 +742,7 @@ export async function listTripsPage(params?: { page?: number; per_page?: number;
     boat_registration_number: t.boat_registration_number ?? null,
     trip_type_label: t.trip_type_label ?? t.trip_type ?? null,
     created_at: toDisplay12h(t.created_at),
+    fishing_activity_count: typeof t.fishing_activity_count === 'number' ? t.fishing_activity_count : (Array.isArray(t.fishing_activities) ? t.fishing_activities.length : null),
   }));
 
   const total = Number(json?.data?.total ?? rows.length);

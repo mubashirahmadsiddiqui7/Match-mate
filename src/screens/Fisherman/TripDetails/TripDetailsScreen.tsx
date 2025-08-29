@@ -597,15 +597,17 @@ export default function TripDetailsScreen() {
           {trip.activities?.length ? (
             <View style={{ gap: 10 }}>
               {trip.activities.map(a => (
-                <View key={String(a.id)} style={styles.lotRow}>
-                  <MaterialIcons name="chevron-right" size={18} color={PALETTE.text700} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.lotText} numberOfLines={1}>
+                <View key={String(a.id)} style={styles.activityCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="list-alt" size={18} color={PALETTE.text700} />
+                    <Text style={styles.activityTitle} numberOfLines={1}>
                       {a.activity_id} {a.number ? `(#${a.number})` : ''}
                     </Text>
+                  </View>
+
+                  <View style={{ marginTop: 6, gap: 4 }}>
                     <Text style={styles.muted} numberOfLines={1}>
-                      {a.location_formatted ||
-                        `${a.gps_latitude ?? '—'}, ${a.gps_longitude ?? '—'}`}
+                      {a.location_formatted || `${a.gps_latitude ?? '—'}, ${a.gps_longitude ?? '—'}`}
                     </Text>
                     <Text style={styles.muted} numberOfLines={1}>
                       Netting: {a.time_of_netting ?? '—'} | Hauling: {a.time_of_hauling ?? '—'}
@@ -614,10 +616,37 @@ export default function TripDetailsScreen() {
                       Gear: {a.gear_type_label ?? a.gear_type ?? '—'} | Mesh: {a.mesh_size_label ?? a.mesh_size ?? '—'}
                     </Text>
                     <Text style={styles.muted} numberOfLines={1}>
-                      Size: {a.net_length ?? '—'} × {a.net_width ?? '—'} | Status:{' '}
-                      {a.status_label ?? a.status ?? '—'}
+                      Size: {a.net_length ?? '—'} × {a.net_width ?? '—'} | Status: {a.status_label ?? a.status ?? '—'}
                     </Text>
                   </View>
+
+                  {/* Species list (if any) */}
+                  {a.fish_species && a.fish_species.length > 0 ? (
+                    <View style={{ marginTop: 10, gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="set-meal" size={16} color={PALETTE.text700} />
+                        <Text style={{ fontWeight: '800', color: PALETTE.text900 }}>Species</Text>
+                      </View>
+                      {a.fish_species.map((s, idx) => (
+                        <View key={String((s as any)?.id ?? idx)} style={styles.speciesRow}>
+                          <MaterialIcons name="chevron-right" size={18} color={PALETTE.text700} />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.lotText} numberOfLines={1}>
+                              {(s as any)?.species_name ?? '—'}
+                            </Text>
+                            <Text style={styles.muted} numberOfLines={1}>
+                              Qty: {(s as any)?.quantity_kg ?? '—'} kg | Type: {(s as any)?.type_label ?? (s as any)?.type ?? '—'}
+                            </Text>
+                            {(s as any)?.grade_label || (s as any)?.grade ? (
+                              <Text style={styles.muted} numberOfLines={1}>
+                                Grade: {(s as any)?.grade_label ?? (s as any)?.grade}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -627,7 +656,7 @@ export default function TripDetailsScreen() {
         </Section>
 
         {/* Fish Lots (legacy / if present) */}
-        <Section title="Fish Lots" icon="inventory-2">
+        {/* <Section title="Fish Lots" icon="inventory-2">
           {trip.lots?.length ? (
             <View style={{ gap: 8 }}>
               {trip.lots.map(l => (
@@ -642,7 +671,7 @@ export default function TripDetailsScreen() {
           ) : (
             <Text style={styles.muted}>—</Text>
           )}
-        </Section>
+        </Section> */}
       </ScrollView>
 
       {/* Modals */}
@@ -903,6 +932,24 @@ const styles = StyleSheet.create({
   },
   lotText: { color: PALETTE.text900, fontWeight: '700' },
   muted: { color: PALETTE.text600, fontSize: 12 },
+  activityCard: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 10,
+    padding: 10,
+  },
+  activityTitle: { color: PALETTE.text900, fontWeight: '800', flexShrink: 1 },
+  speciesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    borderRadius: 10,
+    padding: 8,
+  },
 
   /* action row */
   actionRow: {

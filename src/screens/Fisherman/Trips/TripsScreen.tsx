@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { listTripsPage } from '../../../services/trips';
+import { listTripsPage, startTrip } from '../../../services/trips';
 import PALETTE from '../../../theme/palette';
 
 type TripRow = {
@@ -30,6 +30,7 @@ type TripRow = {
   boat_registration_number?: string | null;
   trip_type_label?: string | null;
   created_at?: string | null;
+  fishing_activity_count?: number | null;
 };
 
 const STATUS_COLORS: Record<TripRow['status'], string> = {
@@ -48,6 +49,7 @@ export default function TripsScreen() {
   );
   const [loading, setLoading] = useState(false);
   const [trips, setTrips] = useState<TripRow[]>([]);
+  const [actionBusyId, setActionBusyId] = useState<string | number | null>(null);
   const navigation = useNavigation();
   const handleBack = () => {
     // go back if possible, else fall back to FishermanHome
@@ -181,7 +183,14 @@ export default function TripsScreen() {
 
           {isActive ? (
             <Pressable
-              onPress={() => (navigation as any).navigate('FishingActivity', { tripId: String(item.trip_name), meta: { id: item.id, trip_id: item.trip_name }, mode: 'create' })}
+              onPress={() =>
+                (navigation as any).navigate('FishingActivity', {
+                  tripId: String(item.trip_name),
+                  meta: { id: item.id, trip_id: item.trip_name },
+                  mode: 'create',
+                  activityNo: (item.fishing_activity_count ?? 0) + 1,
+                })
+              }
               style={[styles.actionBtn, styles.btnInfo]}
               accessibilityLabel="Add Activity"
             >
@@ -194,7 +203,36 @@ export default function TripsScreen() {
           <View style={{ width: '100%' }} />
 
           {/* row 2 */}
-          {isActive ? (
+          {isPending ? (
+            <Pressable
+              onPress={async () => {
+                try {
+                  setActionBusyId(item.id);
+                  await startTrip(item.id);
+                  Alert.alert('Trip Started', 'Status updated to Active.');
+                  await loadTrips();
+                } catch (e: any) {
+                  Alert.alert('Failed', e?.message || 'Could not start trip');
+                } finally {
+                  setActionBusyId(null);
+                }
+              }}
+              style={[styles.actionBtn, styles.btnPrimary, actionBusyId === item.id && { opacity: 0.7 }]}
+              accessibilityLabel="Start Trip"
+              disabled={actionBusyId === item.id}
+            >
+              {actionBusyId === item.id ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Icon name="play-circle-filled" size={18} color="#fff" />
+                  <Text style={styles.btnWhiteText}>Start Trip</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+
+          {isActive && (item.fishing_activity_count ?? 0) > 0 ? (
             <Pressable
               onPress={() => (navigation as any).navigate('TripDetails', { id: item.id })}
               style={[styles.actionBtn, styles.btnWarn]}
@@ -476,6 +514,7 @@ const styles = StyleSheet.create({
   btnGhostText: { color: PALETTE.text900, fontWeight: '800' },
   btnInfo: { backgroundColor: PALETTE.info, borderColor: PALETTE.info },
   btnWarn: { backgroundColor: '#FFE082', borderColor: '#FFC107' },
+  btnPrimary: { backgroundColor: PALETTE.green700, borderColor: PALETTE.green700 },
   btnWhiteText: { color: '#fff', fontWeight: '800' },
   btnDarkText: { color: '#212121', fontWeight: '800' },
 
