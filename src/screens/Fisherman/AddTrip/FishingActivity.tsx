@@ -268,18 +268,17 @@ export default function FishingActivity() {
           visibilityTime: 2500,
         });
 
-        // Navigate to details with local ID
-        navigation.replace('FishingActivityDetails', {
-          activityId: job.localId,
-          fallback: {
-            id: job.localId,
-            activity_id: activityCode,
-            trip_id: displayTripCode,
-            ...body,
-            status: 'pending_upload'
-          },
-          tripId: displayTripCode,
-        });
+                 // Navigate to details with local ID
+         navigation.replace('FishingActivityDetails', {
+           activityId: job.localId,
+           fallback: {
+             id: job.localId,
+             activity_id: activityCode,
+             ...body,
+             status: 'pending_upload'
+           },
+           tripId: displayTripCode,
+         });
       }
     } catch (e: any) {
       Alert.alert(
@@ -303,87 +302,176 @@ export default function FishingActivity() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      
+      {/* Header with back button */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 16, 
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+        backgroundColor: '#1F720D'
+      }}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={{
+            padding: 8,
+            marginRight: 16,
+            borderRadius: 8,
+            backgroundColor: 'rgba(255, 255, 255, 0.2)'
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </Pressable>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#fff' }}>
+          {mode === 'edit' ? 'Edit Fishing Activity' : 'Create Fishing Activity'}
+        </Text>
+      </View>
+
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{ marginBottom: 24 }}>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1f2937' }}>
-            {mode === 'edit' ? 'Edit Fishing Activity' : 'Create Fishing Activity'}
+        {/* Trip Info Card */}
+        <View style={{
+          backgroundColor: '#fff',
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 20,
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2
+        }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 }}>
+            Trip Information
           </Text>
-          <Text style={{ fontSize: 16, color: '#6b7280', marginTop: 4 }}>
+          <Text style={{ fontSize: 16, color: '#6B7280' }}>
             Trip: {displayTripCode} • Activity #{initialActivity}
           </Text>
         </View>
 
-        {/* GPS Status */}
-        <View style={{ marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {/* GPS Status Card */}
+        <View style={{
+          backgroundColor: '#fff',
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 20,
+          borderWidth: 1,
+          borderColor: '#E5E7EB',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <MaterialIcons
               name={gps ? 'location-on' : 'location-off'}
               size={20}
-              color={gps ? '#10b981' : '#ef4444'}
+              color={gps ? '#10B981' : '#EF4444'}
             />
-            <Text style={{ color: gps ? '#10b981' : '#ef4444' }}>
+            <Text style={{ 
+              color: gps ? '#10B981' : '#EF4444',
+              fontWeight: '600',
+              fontSize: 16
+            }}>
               {gps ? 'GPS Ready' : 'Waiting for GPS...'}
             </Text>
-            {gpsLoading && <ActivityIndicator size="small" color="#6b7280" />}
+            {gpsLoading && <ActivityIndicator size="small" color="#6B7280" />}
           </View>
           {gps && (
-            <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+            <Text style={{ 
+              fontSize: 14, 
+              color: '#6B7280', 
+              backgroundColor: '#F3F4F6',
+              padding: 8,
+              borderRadius: 6,
+              textAlign: 'center'
+            }}>
               {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
             </Text>
           )}
         </View>
 
         {/* Form Fields */}
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: 20 }}>
           {/* Activity Number */}
-          <View>
-            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+          <View style={{
+            backgroundColor: '#fff',
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#1F2937' }}>
               Activity Number
             </Text>
             <TextInput
               style={{
                 borderWidth: 1,
-                borderColor: '#d1d5db',
+                borderColor: '#D1D5DB',
                 borderRadius: 8,
                 padding: 12,
                 fontSize: 16,
-                backgroundColor: '#fff',
+                backgroundColor: '#F9FAFB',
+                color: '#1F2937'
               }}
               value={String(watch('activityNo'))}
               onChangeText={(text) => setValue('activityNo', Number(text) || 1)}
               keyboardType="numeric"
               placeholder="1"
+              placeholderTextColor="#9CA3AF"
             />
           </View>
 
           {/* Mesh Size */}
-          <View>
-            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+          <View style={{
+            backgroundColor: '#fff',
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#1F2937' }}>
               Mesh Size
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
+              {([1, 2, 3, 4, 5, 6, 7, 8] as const).map((size) => (
                 <Pressable
                   key={size}
                   onPress={() => setValue('mesh', size)}
                   style={{
                     paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    paddingVertical: 10,
                     borderRadius: 20,
-                    backgroundColor: mesh === size ? '#1f720d' : '#f3f4f6',
+                    backgroundColor: mesh === size ? '#1F720D' : '#F3F4F6',
                     borderWidth: 1,
-                    borderColor: mesh === size ? '#1f720d' : '#d1d5db',
+                    borderColor: mesh === size ? '#1F720D' : '#D1D5DB',
+                    minWidth: 40,
+                    alignItems: 'center'
                   }}
                 >
                   <Text
                     style={{
                       color: mesh === size ? '#fff' : '#374151',
-                      fontWeight: mesh === size ? '600' : '400',
+                      fontWeight: mesh === size ? '600' : '500',
+                      fontSize: 16
                     }}
                   >
                     {size}
@@ -394,68 +482,99 @@ export default function FishingActivity() {
           </View>
 
           {/* Net Dimensions */}
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                Net Length (m)
-              </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#d1d5db',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 16,
-                  backgroundColor: '#fff',
-                }}
-                value={watch('netLen')}
-                onChangeText={(text) => setValue('netLen', text)}
-                keyboardType="numeric"
-                placeholder="0"
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                Net Width (m)
-              </Text>
-              <TextInput
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#d1d5db',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 16,
-                  backgroundColor: '#fff',
-                }}
-                value={watch('netWid')}
-                onChangeText={(text) => setValue('netWid', text)}
-                keyboardType="numeric"
-                placeholder="0"
-              />
+          <View style={{
+            backgroundColor: '#fff',
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#1F2937' }}>
+              Net Dimensions
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 8, color: '#374151' }}>
+                  Net Length (m)
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16,
+                    backgroundColor: '#F9FAFB',
+                    color: '#1F2937'
+                  }}
+                  value={watch('netLen')}
+                  onChangeText={(text) => setValue('netLen', text)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 8, color: '#374151' }}>
+                  Net Width (m)
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#D1D5DB',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16,
+                    backgroundColor: '#F9FAFB',
+                    color: '#1F2937'
+                  }}
+                  value={watch('netWid')}
+                  onChangeText={(text) => setValue('netWid', text)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
             </View>
           </View>
 
           {/* Time Fields */}
-          <View>
-            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+          <View style={{
+            backgroundColor: '#fff',
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#1F2937' }}>
               Fishing Times
             </Text>
-            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+            <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 16 }}>
               Select the start and end times for your fishing activity
             </Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 6 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 8, color: '#374151' }}>
                   Netting Time *
                 </Text>
                 <Pressable
                   onPress={() => setShowNettingPicker(true)}
                   style={{
                     borderWidth: 1,
-                    borderColor: netting ? '#1f720d' : '#d1d5db',
+                    borderColor: netting ? '#1F720D' : '#D1D5DB',
                     borderRadius: 8,
                     padding: 12,
-                    backgroundColor: '#fff',
+                    backgroundColor: '#F9FAFB',
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -463,14 +582,15 @@ export default function FishingActivity() {
                 >
                   <Text style={{ 
                     fontSize: 16, 
-                    color: netting ? '#1f2937' : '#9ca3af' 
+                    color: netting ? '#1F2937' : '#9CA3AF',
+                    fontWeight: netting ? '500' : '400'
                   }}>
                     {formatTimeForDisplay(netting)}
                   </Text>
                   <MaterialIcons 
                     name="access-time" 
                     size={20} 
-                    color={netting ? '#1f720d' : '#9ca3af'} 
+                    color={netting ? '#1F720D' : '#9CA3AF'} 
                   />
                 </Pressable>
                 {showNettingPicker && (
@@ -484,17 +604,17 @@ export default function FishingActivity() {
                 )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 6 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', marginBottom: 8, color: '#374151' }}>
                   Hauling Time *
                 </Text>
                 <Pressable
                   onPress={() => setShowHaulingPicker(true)}
                   style={{
                     borderWidth: 1,
-                    borderColor: hauling ? '#1f720d' : '#d1d5db',
+                    borderColor: hauling ? '#1F720D' : '#D1D5DB',
                     borderRadius: 8,
                     padding: 12,
-                    backgroundColor: '#fff',
+                    backgroundColor: '#F9FAFB',
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -502,14 +622,15 @@ export default function FishingActivity() {
                 >
                   <Text style={{ 
                     fontSize: 16, 
-                    color: hauling ? '#1f2937' : '#9ca3af' 
+                    color: hauling ? '#1F2937' : '#9CA3AF',
+                    fontWeight: hauling ? '500' : '400'
                   }}>
                     {formatTimeForDisplay(hauling)}
                   </Text>
                   <MaterialIcons 
                     name="access-time" 
                     size={20} 
-                    color={hauling ? '#1f720d' : '#9ca3af'} 
+                    color={hauling ? '#1F720D' : '#9CA3AF'} 
                   />
                 </Pressable>
                 {showHaulingPicker && (
@@ -525,43 +646,59 @@ export default function FishingActivity() {
             </View>
           </View>
         </View>
-
-        {/* Actions */}
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 32 }}>
-          <Pressable
-            disabled={submitting || gpsLoading}
-            onPress={onSubmit}
-            style={[
-              {
-                flex: 1,
-                backgroundColor: '#1f720d',
-                paddingVertical: 16,
-                borderRadius: 8,
-                alignItems: 'center',
-                justifyContent: 'center',
-              },
-              (submitting || gpsLoading) && { opacity: 0.7 },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons
-                  name={mode === 'edit' ? 'save' : 'save'}
-                  size={18}
-                  color="#fff"
-                />
-                <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-                  {mode === 'edit'
-                    ? 'Update Fishing Activity'
-                    : 'Create Fishing Activity'}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
       </ScrollView>
+
+      {/* Fixed Submit Button */}
+      <View style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        padding: 16,
+        paddingBottom: 32,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 8
+      }}>
+        <Pressable
+          disabled={submitting || gpsLoading}
+          onPress={onSubmit}
+          style={[
+            {
+              backgroundColor: '#1F720D',
+              paddingVertical: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8
+            },
+            (submitting || gpsLoading) && { opacity: 0.7 }
+          ]}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <MaterialIcons
+                name={mode === 'edit' ? 'save' : 'add-circle'}
+                size={20}
+                color="#fff"
+              />
+              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>
+                {mode === 'edit'
+                  ? 'Update Fishing Activity'
+                  : 'Create Fishing Activity'}
+              </Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
