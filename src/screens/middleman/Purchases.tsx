@@ -6,21 +6,22 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  RefreshControl,
   Alert,
+  RefreshControl,
+  TextInput,
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MiddleManStackParamList } from '../../app/navigation/stacks/MiddleManStack';
 import {
-  fetchAssignments,
-  type MiddlemanAssignment,
+  fetchPurchases,
+  confirmPurchase,
+  type FishPurchase,
   type PaginatedResponse,
   getStatusColor,
   getStatusText,
   formatDate,
-  formatDateTime,
 } from '../../services/middlemanDistribution';
 
 // --- Types ---
@@ -29,37 +30,26 @@ type Nav = NativeStackNavigationProp<MiddleManStackParamList, 'MiddleManHome'>;
 // --- Dropdown Data ---
 const Status = [
   { label: 'All Status', value: 'All Status' },
-  { label: 'Active', value: 'active' },
-  { label: 'Inactive', value: 'inactive' },
   { label: 'Pending', value: 'pending' },
+  { label: 'Confirmed', value: 'confirmed' },
+  { label: 'Completed', value: 'completed' },
+  { label: 'Cancelled', value: 'cancelled' },
 ];
 
-const Company = [
-  { label: 'All Companies', value: 'All Companies' },
-  { label: 'Ali & sons', value: 'Ali & sons' },
-  { label: 'Bashir co.', value: 'Bashir co.' },
-];
-
-const MiddleMen = [
-  { label: 'All Middle Men', value: 'All Middle Men' },
-  { label: 'Middle Man 1', value: 'Middle Man 1' },
-];
-
-export default function Assignments() {
+export default function Purchases() {
   const navigation = useNavigation<Nav>();
 
-  const [assignments, setAssignments] = useState<MiddlemanAssignment[]>([]);
-  const [meta, setMeta] = useState<PaginatedResponse<MiddlemanAssignment>['meta'] | null>(null);
+  const [purchases, setPurchases] = useState<FishPurchase[]>([]);
+  const [meta, setMeta] = useState<PaginatedResponse<FishPurchase>['meta'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
 
   const [status, setStatus] = useState<string | null>(null);
-  const [company, setCompany] = useState<string | null>(null);
-  const [middleMan, setMiddleMan] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   // --- Fetch API ---
-  const loadAssignments = useCallback(async (p = 1, replace = false) => {
+  const loadPurchases = useCallback(async (p = 1, replace = false) => {
     if (p === 1 && !replace) setLoading(true);
     try {
       const params: any = {
@@ -71,45 +61,67 @@ export default function Assignments() {
         params.status = status;
       }
       
-      if (company && company !== 'All Companies') {
-        params.company_id = company;
-      }
-      
-      if (middleMan && middleMan !== 'All Middle Men') {
-        params.middle_man_id = middleMan;
+      if (search.trim()) {
+        params.search = search.trim();
       }
 
-      const response = await fetchAssignments(params);
+      const response = await fetchPurchases(params);
       setMeta(response.meta);
       setPage(response.meta.current_page);
-      setAssignments(prev => (replace || p === 1 ? response.items : [...prev, ...response.items]));
+      setPurchases(prev => (replace || p === 1 ? response.items : [...prev, ...response.items]));
     } catch (error) {
-      console.error('Error loading assignments:', error);
-      Alert.alert('Error', 'Failed to load assignments. Please try again.');
+      console.error('Error loading purchases:', error);
+      Alert.alert('Error', 'Failed to load purchases. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [status, company, middleMan]);
+  }, [status, search]);
 
   useEffect(() => {
-    loadAssignments(1, true);
-  }, [loadAssignments]);
+    loadPurchases(1, true);
+  }, [loadPurchases]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadAssignments(1, true);
-  }, [loadAssignments]);
+    loadPurchases(1, true);
+  }, [loadPurchases]);
 
   const onEndReached = useCallback(() => {
     if (!meta || page >= meta.last_page) return;
-    loadAssignments(page + 1);
-  }, [meta, page, loadAssignments]);
+    loadPurchases(page + 1);
+  }, [meta, page, loadPurchases]);
+
+  // --- Handle Confirm Purchase ---
+  const handleConfirmPurchase = useCallback(async (purchaseId: number) => {
+    Alert.alert(
+      'Confirm Purchase',
+      'Are you sure you want to confirm this purchase?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await confirmPurchase(purchaseId);
+              // Refresh the data
+              loadPurchases(1, true);
+              Alert.alert('Success', 'Purchase confirmed successfully!');
+            } catch (error) {
+              console.error('Error confirming purchase:', error);
+              Alert.alert('Error', 'Failed to confirm purchase. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [loadPurchases]);
 
   // --- Render List Item ---
-  const renderItem = ({ item }: { item: MiddlemanAssignment }) => {
+  const renderItem = ({ item }: { item: FishPurchase }) => {
     const statusColor = getStatusColor(item.status);
-    const statusText = item.status_label || getStatusText(item.status);
+    const isPending = item.status === 'pending';
 
     return (
       <TouchableOpacity
@@ -120,66 +132,53 @@ export default function Assignments() {
           {/* Header */}
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle} numberOfLines={1}>
-              Assignment #{item.id}
+              Purchase #{item.id}
             </Text>
             <View style={[styles.badge, { backgroundColor: statusColor }]}>
-              <Text style={styles.badgeText}>{statusText}</Text>
+              <Text style={styles.badgeText}>{getStatusText(item.status)}</Text>
             </View>
           </View>
 
           {/* Info Rows */}
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Company:</Text>
-            <Text style={styles.cardValue}>{item.company?.name || '—'}</Text>
+            <Text style={styles.cardLabel}>Lot No:</Text>
+            <Text style={styles.cardValue}>{item.distribution?.lot_no || '—'}</Text>
           </View>
 
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Middleman:</Text>
-            <Text style={styles.cardValue} numberOfLines={2}>
-              {item.middle_man?.name || '—'}
-            </Text>
+            <Text style={styles.cardLabel}>Species:</Text>
+            <Text style={styles.cardValue}>{item.distribution?.species || '—'}</Text>
           </View>
 
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Business Address:</Text>
-            <Text style={styles.cardValue} numberOfLines={2}>
-              {item.company?.business_address || '—'}
-            </Text>
+            <Text style={styles.cardLabel}>Quantity:</Text>
+            <Text style={styles.cardValue}>{item.quantity_kg} kg</Text>
           </View>
 
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Business Phone:</Text>
-            <Text style={styles.cardValue}>{item.company?.business_phone || '—'}</Text>
+            <Text style={styles.cardLabel}>Price:</Text>
+            <Text style={styles.cardValue}>${item.purchase_price}</Text>
           </View>
 
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Business Email:</Text>
-            <Text style={styles.cardValue}>{item.company?.business_email || '—'}</Text>
+            <Text style={styles.cardLabel}>Date:</Text>
+            <Text style={styles.cardValue}>{formatDate(item.purchase_date)}</Text>
           </View>
 
           <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Assigned Date:</Text>
-            <Text style={styles.cardValue}>{formatDate(item.assigned_date)}</Text>
+            <Text style={styles.cardLabel}>Payment:</Text>
+            <Text style={styles.cardValue}>{item.payment_status}</Text>
           </View>
 
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Expiry Date:</Text>
-            <Text style={styles.cardValue}>{formatDate(item.expiry_date)}</Text>
-          </View>
-
-          {item.notes && (
-            <View style={styles.cardRow}>
-              <Text style={styles.cardLabel}>Notes:</Text>
-              <Text style={styles.cardValue} numberOfLines={3}>
-                {item.notes}
-              </Text>
-            </View>
+          {/* Confirm Button for Pending Purchases */}
+          {isPending && (
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={() => handleConfirmPurchase(item.id)}
+            >
+              <Text style={styles.confirmButtonText}>Confirm Purchase</Text>
+            </TouchableOpacity>
           )}
-
-          <View style={styles.cardRow}>
-            <Text style={styles.cardLabel}>Status:</Text>
-            <Text style={styles.cardValue}>{statusText}</Text>
-          </View>
         </View>
       </TouchableOpacity>
     );
@@ -190,22 +189,28 @@ export default function Assignments() {
     <View>
       {/* Filters */}
       <View style={styles.filterCard}>
-        <Text style={styles.filterHeader}>Filter Assignments</Text>
+        <Text style={styles.filterHeader}>Filter Purchases</Text>
 
         {/* Status */}
         <FilterDropdown label="Status" data={Status} value={status} onChange={setStatus} />
 
-        {/* Company */}
-        <FilterDropdown label="Company" data={Company} value={company} onChange={setCompany} />
-
-        {/* Middle Man */}
-        <FilterDropdown label="Middle Man" data={MiddleMen} value={middleMan} onChange={setMiddleMan} />
+        {/* Search */}
+        <View style={styles.searchRow}>
+          <Text style={styles.searchLabel}>Search:</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by lot no, species..."
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={() => loadPurchases(1, true)}
+          />
+        </View>
 
         {/* Buttons */}
         <View style={styles.filterButtons}>
           <TouchableOpacity 
             style={styles.applyBtn}
-            onPress={() => loadAssignments(1, true)}
+            onPress={() => loadPurchases(1, true)}
           >
             <Text style={styles.btnText}>🔍 Apply Filters</Text>
           </TouchableOpacity>
@@ -214,9 +219,8 @@ export default function Assignments() {
             style={styles.clearBtn}
             onPress={() => {
               setStatus(null);
-              setCompany(null);
-              setMiddleMan(null);
-              loadAssignments(1, true);
+              setSearch('');
+              loadPurchases(1, true);
             }}
           >
             <Text style={styles.btnText}>✖️ Clear Filters</Text>
@@ -227,7 +231,7 @@ export default function Assignments() {
       {/* List Header */}
       <View style={styles.listCard}>
         <Text style={styles.listHeader}>
-          All Assigned Companies ({meta?.total || 0})
+          All Purchases ({meta?.total || 0})
         </Text>
       </View>
     </View>
@@ -238,7 +242,7 @@ export default function Assignments() {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#07890bff" />
-        <Text style={styles.loaderText}>Loading assignments...</Text>
+        <Text style={styles.loaderText}>Loading purchases...</Text>
       </View>
     );
   }
@@ -246,7 +250,7 @@ export default function Assignments() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={assignments}
+        data={purchases}
         keyExtractor={item => item.id.toString()}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
@@ -259,7 +263,7 @@ export default function Assignments() {
         contentContainerStyle={{ paddingBottom: 24 }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No assignments found</Text>
+            <Text style={styles.emptyText}>No purchases found</Text>
             <Text style={styles.emptySubText}>Try adjusting your filters</Text>
           </View>
         }
@@ -350,6 +354,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   dropdownText: {
+    fontSize: 14,
+    color: '#222',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  searchLabel: {
+    width: '28%',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#444',
+  },
+  searchInput: {
+    flex: 1,
+    height: 45,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
     fontSize: 14,
     color: '#222',
   },
@@ -456,5 +482,18 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
     textAlign: 'right',
+  },
+  confirmButton: {
+    backgroundColor: '#4caf50',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
