@@ -61,16 +61,27 @@ export default function ViewFinalProduct() {
         data={filtered}
         keyExtractor={it => it.id}
         ListHeaderComponent={() => (
-          <View style={{ padding: 14 }}>
-            <View style={styles.hero}>
-              <Text style={styles.heroTitle}>Traceability Records</Text>
-              <Text style={styles.heroSub}>Filter by status</Text>
-              <View style={styles.chipsRow}>
-                {(['All','Approved','Pending','Rejected'] as const).map(s => (
-                  <Pressable key={s} onPress={() => setStatus(s)} style={[styles.chip, status === s && styles.chipActive]}>
-                    <Text style={[styles.chipText, status === s && styles.chipTextActive]}>{s}</Text>
-                  </Pressable>
-                ))}
+          <View>
+            {/* App bar */}
+            <View style={styles.appbar}>
+              <Pressable onPress={() => (navigation as any).goBack()} style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}>
+                <Icon name="arrow-back" size={22} color="#FFFFFF" />
+              </Pressable>
+              <Text style={styles.appbarTitle}>Traceability Records</Text>
+              <View style={{ width: 44 }} />
+            </View>
+
+            {/* Filters (outside header) */}
+            <View style={{ paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4 }}>
+              <View style={styles.filtersCard}>
+                <Text style={styles.filtersTitle}>Status</Text>
+                <View style={styles.chipsRow}>
+                  {(['All','Approved','Pending','Rejected'] as const).map(s => (
+                    <Pressable key={s} onPress={() => setStatus(s)} style={[styles.chip, status === s && styles.chipActive]}>
+                      <Text style={[styles.chipText, status === s && styles.chipTextActive]}>{s}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             </View>
           </View>
@@ -124,9 +135,11 @@ export default function ViewFinalProduct() {
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: PALETTE.green700, borderRadius: 16, padding: 14 },
-  heroTitle: { color: '#fff', fontWeight: '800', textAlign: 'center' },
-  heroSub: { color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 4 },
+  appbar: { backgroundColor: PALETTE.green700, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  backBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#145A1F' },
+  appbarTitle: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  filtersCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', padding: 12 },
+  filtersTitle: { color: PALETTE.text700, fontWeight: '700', marginBottom: 8 },
   chipsRow: { marginTop: 10, flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: '#C7E0CC', backgroundColor: '#FFFFFF' },
   chipActive: { backgroundColor: '#E8F5E9', borderColor: '#A7D7B5' },
