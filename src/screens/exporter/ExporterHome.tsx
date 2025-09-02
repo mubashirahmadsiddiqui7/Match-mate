@@ -326,19 +326,7 @@ export default function ExporterHome() {
         </View>
 
         {/* Companies Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Companies</Text>
-          <Text style={styles.subtle}>Manage your company partnerships and relationships</Text>
-
-          <View style={styles.actionGrid}>
-            <ActionTile
-              icon="business"
-              title="View Companies"
-              subtitle="Browse partner companies"
-              onPress={() => navigation.navigate('CompaniesList')}
-            />
-          </View>
-        </View>
+        {/*   */}
 
         {/* Quick Actions */}
         <View style={styles.card}>

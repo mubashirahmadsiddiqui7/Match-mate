@@ -4,20 +4,26 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, TextInput, A
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import PALETTE from '../../theme/palette';
-import { searchUsers, type User } from '../../services/users';
+import { fetchExporterCompanies, type ExporterCompany } from '../../services/traceability';
 
 export default function CompaniesList() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState<boolean>(true);
   const [q, setQ] = useState('');
-  const [items, setItems] = useState<User[]>([]);
+  const [items, setItems] = useState<ExporterCompany[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await searchUsers({ user_type: 'exporter', q, page: 1, per_page: 50 });
-      // users.ts returns Paginated<User>
-      setItems(res.data || []);
+      const res = await fetchExporterCompanies();
+      // Filter by search query if provided
+      const filtered = q.trim() 
+        ? res.filter(item => 
+            item.company_name.toLowerCase().includes(q.toLowerCase()) ||
+            item.name.toLowerCase().includes(q.toLowerCase())
+          )
+        : res;
+      setItems(filtered);
     } catch (e) {
       setItems([]);
     } finally {
@@ -29,18 +35,18 @@ export default function CompaniesList() {
 
   const totals = useMemo(() => {
     const total = items.length;
-    const active = items.filter(u => u.is_active).length;
+    const active = items.filter(u => u.status === 'active').length;
     return { total, active, suspended: 0, expired: 0 };
   }, [items]);
 
-  const renderItem = ({ item }: { item: User }) => {
+  const renderItem = ({ item }: { item: ExporterCompany }) => {
     return (
       <View style={styles.rowCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.companyName} numberOfLines={1}>{item.company_name || item.name}</Text>
+          <Text style={styles.companyName} numberOfLines={1}>{item.company_name}</Text>
           <View style={styles.metaRow}>
             <Text style={styles.metaK}>REGISTRATION</Text>
-            <Text style={styles.metaV}>{item.export_license_number || item.fcs_license_number || '—'}</Text>
+            <Text style={styles.metaV}>{item.registration_no || '—'}</Text>
           </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaK}>TYPE</Text>
@@ -48,17 +54,22 @@ export default function CompaniesList() {
           </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaK}>STATUS</Text>
-            <View style={[styles.statusPill, { backgroundColor: item.is_active ? '#E8F5E9' : '#FFEBEE' }]}>
-              <Text style={{ color: item.is_active ? PALETTE.green700 : PALETTE.error, fontWeight: '800' }}>{item.is_active ? 'Active' : 'Inactive'}</Text>
+            <View style={[styles.statusPill, { backgroundColor: item.status === 'active' ? '#E8F5E9' : '#FFEBEE' }]}>
+              <Text style={{ color: item.status === 'active' ? PALETTE.green700 : PALETTE.error, fontWeight: '800' }}>
+                {item.status === 'active' ? 'Active' : 'Inactive'}
+              </Text>
             </View>
           </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaK}>CONTACT</Text>
-            <Text style={styles.metaV} numberOfLines={1}>{(item.first_name || item.name) + (item.phone ? ` - ${item.phone}` : '')}</Text>
+            <Text style={styles.metaV} numberOfLines={1}>
+              {item.contact_person || item.name}
+              {item.phone ? ` - ${item.phone}` : ''}
+            </Text>
           </View>
           <View style={styles.metaRow}>
-            <Text style={styles.metaK}>CREATED</Text>
-            <Text style={styles.metaV} numberOfLines={1}>{new Date(item.created_at || '').toDateString() || '—'}</Text>
+            <Text style={styles.metaK}>EMAIL</Text>
+            <Text style={styles.metaV} numberOfLines={1}>{item.email || '—'}</Text>
           </View>
         </View>
         <Pressable style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.9 }]} onPress={() => { /* could navigate to company details if exists */ }}>

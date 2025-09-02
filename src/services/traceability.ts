@@ -64,6 +64,7 @@ export async function createTraceabilityRecord(body: CreateTraceabilityBody): Pr
 export type ExporterCompany = {
   id: number;
   name: string;
+  company_name: string;
   registration_no?: string | null;
   status?: string | null;
   contact_person?: string | null;

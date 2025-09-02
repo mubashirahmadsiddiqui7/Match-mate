@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import PALETTE from '../../theme/palette';
 import { createExporterPurchase, fetchDistributions, fetchDistributionById } from '../../services/middlemanDistribution';
 import { fetchFishLotById } from '../../services/lots';
-import { searchUsers, type User } from '../../services/users';
+import { fetchExporterCompanies, type ExporterCompany } from '../../services/traceability';
 
 type LotRow = { lot_no: string; max?: number | null; quantity_kg: string };
 
@@ -22,7 +22,7 @@ export default function CreatePurchase() {
   const [distModal, setDistModal] = useState(false);
   const [companyModal, setCompanyModal] = useState(false);
   const [distOptions, setDistOptions] = useState<Array<{ id: number; title: string }>>([]);
-  const [companies, setCompanies] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<ExporterCompany[]>([]);
 
   // preload dropdown data
   useEffect(() => {
@@ -32,8 +32,8 @@ export default function CreatePurchase() {
         setDistOptions(dRes.items.map(d => ({ id: d.id, title: `Distribution #${d.id}` })));
       } catch {}
       try {
-        const uRes = await searchUsers({ user_type: 'exporter', page: 1, per_page: 50 });
-        setCompanies(uRes.data || []);
+        const companiesRes = await fetchExporterCompanies();
+        setCompanies(companiesRes);
       } catch {}
     })();
   }, []);
@@ -130,7 +130,9 @@ export default function CreatePurchase() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Purchase Details</Text>
           <Pressable onPress={() => setCompanyModal(true)} style={({ pressed }) => [styles.select, pressed && { opacity: 0.95 }]}>
-            <Text style={{ color: companyId ? PALETTE.text900 : '#9CA3AF' }}>{companyId ? `Company ID: ${companyId}` : 'Select company…'}</Text>
+            <Text style={{ color: companyId ? PALETTE.text900 : '#9CA3AF' }}>
+              {companyId ? companies.find(c => String(c.id) === companyId)?.company_name || `Company ID: ${companyId}` : 'Select company…'}
+            </Text>
             <Icon name="arrow-drop-down" size={22} color={PALETTE.text700} />
           </Pressable>
           <Field label="Final Product Name" value={product} onChangeText={setProduct} />
@@ -177,7 +179,7 @@ export default function CreatePurchase() {
       </ScrollView>
 
       {/* Distribution picker */}
-      <Modal visible={distModal} animationType="slide" transparent onRequestClose={() => setDistModal(false)}>
+      <Modal visible={distModal} animationType="fade" transparent onRequestClose={() => setDistModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setDistModal(false)} />
         <View style={styles.modalSheet}>
           <Text style={styles.modalTitle}>Select Distribution</Text>
@@ -190,7 +192,7 @@ export default function CreatePurchase() {
       </Modal>
 
       {/* Company picker */}
-      <Modal visible={companyModal} animationType="slide" transparent onRequestClose={() => setCompanyModal(false)}>
+      <Modal visible={companyModal} animationType="fade" transparent onRequestClose={() => setCompanyModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setCompanyModal(false)} />
         <View style={styles.modalSheet}>
           <Text style={styles.modalTitle}>Select Company</Text>
@@ -251,7 +253,22 @@ const styles = StyleSheet.create({
   sectionTitle: { color: PALETTE.text900, fontWeight: '800', marginBottom: 10, fontSize: 16 },
   select: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: PALETTE.border, backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 10 : 8 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  modalSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, backgroundColor: '#fff', padding: 16 },
+  modalSheet: { 
+    position: 'absolute', 
+    left: 20, 
+    right: 20, 
+    top: '50%', 
+    transform: [{ translateY: -200 }], // Half of approximate modal height
+    borderRadius: 16, 
+    backgroundColor: '#fff', 
+    padding: 16,
+    maxHeight: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   modalTitle: { color: PALETTE.text900, fontWeight: '800', fontSize: 16, marginBottom: 8 },
   modalItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: PALETTE.border },
 });
