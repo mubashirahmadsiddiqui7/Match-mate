@@ -3,7 +3,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   Platform,
   Pressable,
@@ -12,8 +11,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  Alert,
+  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,10 +23,21 @@ import { logout } from '../../redux/actions/authActions';
 import type { MiddleManStackParamList } from '../../app/navigation/stacks/MiddleManStack';
 import PALETTE from '../../theme/palette';
 import {
-  fetchFishLots,
-  type FishLot,
-  type LotsPage,
-} from '../../services/lots';
+  fetchDistributions,
+  fetchAssignments,
+  fetchPurchases,
+  type FishLotDistribution,
+  type MiddlemanAssignment,
+  type FishPurchase,
+  type PaginatedResponse,
+  confirmPurchase,
+  getStatusColor,
+  getStatusText,
+  formatDate,
+  formatDateTime,
+} from '../../services/middlemanDistribution';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 type Nav = NativeStackNavigationProp<MiddleManStackParamList, 'MiddleManHome'>;
 
@@ -36,28 +48,42 @@ export default function MiddleManHome() {
   const dispatch = useDispatch();
 
   // list state
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const [lots, setLots] = useState<FishLot[]>([]);
-  const [meta, setMeta] = useState<LotsPage['meta'] | null>(null);
+  const [distributions, setDistributions] = useState<FishLotDistribution[]>([]);
+  const [assignments, setAssignments] = useState<MiddlemanAssignment[]>([]);
+  const [purchases, setPurchases] = useState<FishPurchase[]>([]);
+  const [meta, setMeta] = useState<PaginatedResponse<FishLotDistribution>['meta'] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const loadingMoreRef = useRef(false);
 
   const load = useCallback(
-    async (p = 1, q = query, replace = false) => {
+    async (replace = false) => {
       if (loadingMoreRef.current) return;
       loadingMoreRef.current = true;
-      if (p === 1 && !replace) setLoading(true);
+      if (!replace) setLoading(true);
       try {
-        const res = await fetchFishLots({
-          page: p,
+        // Load distributions
+        const distributionsRes = await fetchDistributions({
+          page: 1,
           per_page: 15,
-          search: q?.trim() || undefined,
         });
-        setMeta(res.meta);
-        setPage(res.meta.current_page);
-        setLots(prev => (replace || p === 1 ? res.items : [...prev, ...res.items]));
+        
+        // Load assignments
+        const assignmentsRes = await fetchAssignments({
+          page: 1,
+          per_page: 15,
+        });
+        
+        // Load purchases
+        const purchasesRes = await fetchPurchases({
+          page: 1,
+          per_page: 15,
+        });
+
+        setMeta(distributionsRes.meta);
+        setDistributions(distributionsRes.items);
+        setAssignments(assignmentsRes.items);
+        setPurchases(purchasesRes.items);
       } catch (e) {
         // non-fatal; surface as needed (Toast, Sentry, etc.)
         console.log('[MiddleManHome] load error', e);
@@ -67,26 +93,40 @@ export default function MiddleManHome() {
         loadingMoreRef.current = false;
       }
     },
-    [query],
+    [],
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load(1, query, true);
-  }, [load, query]);
-
-  const onEndReached = useCallback(() => {
-    if (!meta || page >= meta.last_page || loadingMoreRef.current) return;
-    load(page + 1);
-  }, [meta, page, load]);
+    load(true);
+  }, [load]);
 
   // initial load
   React.useEffect(() => {
-    load(1, query, true);
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = useMemo(() => lots, [lots]);
+  const pendingPurchases = useMemo(() => 
+    purchases.filter(p => p.status === 'pending'), [purchases]
+  );
+
+  const totalDistributions = meta?.total ?? 0;
+  const totalAssignments = assignments.length;
+  const totalPendingPurchases = pendingPurchases.length;
+
+  // Mock middleman data - replace with actual user data
+  const middlemanInfo = {
+    name: "Hamza Middleman",
+    email: "middle.man@gmail.com",
+    phone: "03216598562",
+    license: "Lic-1212",
+    status: "Active",
+    joinDate: "August 28, 2025",
+    totalDistributions: totalDistributions,
+    totalAssignments: totalAssignments,
+    pendingPurchases: totalPendingPurchases,
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -95,94 +135,151 @@ export default function MiddleManHome() {
         backgroundColor={PALETTE.green700}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image source={AVATAR} style={styles.avatar} />
-          <View style={{marginLeft:-20}}>
-            <Text style={styles.welcome}>Welcome back, Middle!</Text>
-            <Text style={styles.subtle}>Marine Fisheries Department Portal</Text>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PALETTE.green700} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.avatarContainer}>
+              <Image source={AVATAR} style={styles.avatar} />
+              <View style={styles.statusIndicator} />
+            </View>
+            <View style={styles.headerInfo}>
+              <Text style={styles.welcome}>Welcome back, {middlemanInfo.name}!</Text>
+              <Text style={styles.subtle}>Marine Fisheries Department Portal</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>{middlemanInfo.status}</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => dispatch(logout())}
-          style={styles.logoutBtn}
-        >
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
-      </View>
-
-      {/* Quick metrics & actions */}
-      <View style={styles.metricsRow}>
-        <MetricPill label="Account" value="Active" tone="success" />
-        <MetricPill label="Distributions" value={`${meta?.total ?? 0}`} />
-        <MetricPill label="Pending" value={estimatePending(filtered)} tone="warn" />
-      </View>
-
-      <View style={styles.quickRow}>
-        <QuickButton label="Purchases" onPress={() => navigation.navigate('lotDetails')} icon="$" />
-        <QuickButton label="Distributions" onPress={() => navigation.navigate('Distributions')} icon="🐠" />
-        <QuickButton label="Assignments" onPress={() => navigation.navigate('Assignments')} icon="🏢" />
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchWrap}>
-        <TextInput
-          placeholder="Search by Distribution no., lot no.."
-          placeholderTextColor={PALETTE.text600}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={() => load(1, query, true)}
-          style={styles.search}
-          returnKeyType="search"
-        />
-        <Pressable onPress={() => { setQuery(''); load(1, '', true); }} style={styles.clearBtn}>
-          <Text style={styles.clearText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {/* List */}
-      {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator />
-          <Text style={styles.loaderText}>Loading your lots…</Text>
+        {/* Middleman Information Card */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>📋 Middleman Information</Text>
+          
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>📧 Email</Text>
+              <Text style={styles.infoValue}>{middlemanInfo.email}</Text>
+            </View>
+            
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>📞 Phone</Text>
+              <Text style={styles.infoValue}>{middlemanInfo.phone}</Text>
+            </View>
+            
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>🪪 License</Text>
+              <Text style={styles.infoValue}>{middlemanInfo.license}</Text>
+            </View>
+            
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>📅 Join Date</Text>
+              <Text style={styles.infoValue}>{middlemanInfo.joinDate}</Text>
+            </View>
+          </View>
         </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={item => String(item.id)}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PALETTE.green700} />
-          }
-          onEndReachedThreshold={0.2}
-          onEndReached={onEndReached}
-          ListHeaderComponent={<SectionHeader title="Distributions Given" />}
-          ListEmptyComponent={<EmptyState onRetry={() => load(1, query, true)} />}
-          renderItem={({ item }) => (
-            <LotRow
-              lot={item}
-              onPress={() => navigation.navigate('lotDetails', { id: item.id })}
+
+        {/* Quick metrics & actions */}
+        <View style={styles.metricsRow}>
+          <MetricPill label="Distributions" value={`${totalDistributions}`} />
+          <MetricPill label="Assignments" value={`${totalAssignments}`} />
+          <MetricPill label="Pending Purchases" value={totalPendingPurchases} tone="warn" />
+        </View>
+
+        {/* Quick Action Buttons */}
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsTitle}>🚀 Quick Actions</Text>
+          
+          <View style={styles.quickActionsGrid}>
+            <QuickButton 
+              label="All Distributions" 
+              onPress={() => navigation.navigate('Distributions')} 
+              icon="🐠" 
+              description="View all distributions"
             />
+            {/* <QuickButton 
+              label="Add New Distribution" 
+              onPress={() => navigation.navigate('AddDistribution')} 
+              icon="➕" 
+              description="Create new distribution"
+            /> */}
+            <QuickButton 
+              label="All Assignments" 
+              onPress={() => navigation.navigate('Assignments')} 
+              icon="🏢" 
+              description="View assignments"
+            />
+            <QuickButton 
+              label="All Purchases" 
+              onPress={() => navigation.navigate('Purchases')} 
+              icon="💰" 
+              description="Manage purchases"
+            />
+          </View>
+        </View>
+
+        {/* Recent Activity */}
+        <View style={styles.recentActivityContainer}>
+          <Text style={styles.recentActivityTitle}>📊 Recent Activity</Text>
+          
+          {loading ? (
+            <View style={styles.loader}>
+              <ActivityIndicator size="large" color={PALETTE.green700} />
+              <Text style={styles.loaderText}>Loading recent activity...</Text>
+            </View>
+          ) : (
+            <View style={styles.activityList}>
+              {distributions.slice(0, 3).map((distribution, index) => (
+                <View key={distribution.id} style={styles.activityItem}>
+                  <View style={styles.activityIcon}>
+                    <Text style={styles.activityIconText}>🐠</Text>
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>Distribution #{distribution.id}</Text>
+                    <Text style={styles.activitySubtitle}>
+                      {distribution.total_quantity_kg} KG • {formatDate(distribution.created_at)}
+                    </Text>
+                  </View>
+                  <View style={[styles.activityStatus, { backgroundColor: getStatusColor(distribution.verification_status) }]}>
+                    <Text style={styles.activityStatusText}>
+                      {distribution.verification_status_label || getStatusText(distribution.verification_status)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              
+              {distributions.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>📋</Text>
+                  <Text style={styles.emptyStateTitle}>No Recent Activity</Text>
+                  <Text style={styles.emptyStateSubtitle}>Your recent distributions will appear here</Text>
+                </View>
+              )}
+            </View>
           )}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          style={{ flex: 1 }}
-        />
-      )}
+        </View>
+      </ScrollView>
+
+      {/* Floating Logout Button */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => dispatch(logout())}
+        style={styles.floatingLogoutBtn}
+      >
+        <Text style={styles.floatingLogoutText}>Logout</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }
 
 /* -------------------------- UI bits -------------------------- */
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-  );
-}
 
 function MetricPill({
   label,
@@ -208,216 +305,340 @@ function MetricPill({
 function QuickButton({
   label,
   icon,
+  description,
   onPress,
 }: {
   label: string;
   icon: string;
+  description: string;
   onPress: () => void;
 }) {
   return (
     <Pressable onPress={onPress} style={styles.quickBtn}>
-      <Text style={styles.quickIcon}>{icon}</Text>
-      <Text style={styles.quickLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function LotRow({ lot, onPress }: { lot: FishLot; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <View style={styles.cardTop}>
-        <Text style={styles.cardTitle}>{lot.lot_no}</Text>
-        <Badge tone={lot.status === 'pending' ? 'warn' : 'success'} text={lot.status} />
+      <View style={styles.quickBtnIcon}>
+        <Text style={styles.quickIcon}>{icon}</Text>
       </View>
-
-      <View style={styles.cardGrid}>
-        <KV label="Species" value={lot.species ?? '—'} />
-        <KV label="Weight (kg)" value={String(lot.weight_kg ?? '—')} />
-        <KV label="Grade" value={lot.grade ?? '—'} />
-        <KV label="Port" value={lot.port_location ?? '—'} />
-        <KV label="Captured" value={formatDate(lot.captured_at)} />
-        <KV label="Fisherman" value={lot.user?.name ?? '—'} />
+      <View style={styles.quickBtnContent}>
+        <Text style={styles.quickLabel}>{label}</Text>
+        <Text style={styles.quickDescription}>{description}</Text>
+      </View>
+      <View style={styles.quickBtnArrow}>
+        <Text style={styles.arrowIcon}>→</Text>
       </View>
     </Pressable>
   );
-}
-
-function Badge({ text, tone }: { text: string; tone: 'success' | 'warn' | 'neutral' }) {
-  const bg = tone === 'success' ? '#DCFCE7' : tone === 'warn' ? '#FFEFD5' : '#E5E7EB';
-  const fg = tone === 'success' ? '#166534' : tone === 'warn' ? '#9A3412' : '#374151';
-  return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.badgeText, { color: fg }]}>{text}</Text>
-    </View>
-  );
-}
-
-function KV({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.kv}>
-      <Text style={styles.kvLabel}>{label}</Text>
-      <Text style={styles.kvValue}>{value}</Text>
-    </View>
-  );
-}
-
-function EmptyState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>No Distributions to show</Text>
-      <Text style={styles.emptySub}>Try adjusting search or pull to refresh.</Text>
-      <Pressable onPress={onRetry} style={styles.retryBtn}>
-        <Text style={styles.retryText}>Reload</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-/* -------------------------- helpers -------------------------- */
-
-function formatDate(iso?: string | null) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString();
-}
-
-function estimatePending(items: FishLot[]) {
-  return items.reduce((n, x) => (String(x.status).toLowerCase() === 'pending' ? n + 1 : n), 0);
 }
 
 /* -------------------------- styles -------------------------- */
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollView: { flex: 1 },
 
   header: {
     backgroundColor: PALETTE.green700,
-    padding: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 11 },
-  welcome: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  subtle: { color: '#E6F3E7', fontSize: 12 },
-
-  logoutBtn: {
-    backgroundColor: '#ef2a07',
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avatarContainer: { position: 'relative' },
+  avatar: { width: 60, height: 60, borderRadius: 30 },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#10B981',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  welcome: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  subtle: { color: '#E6F3E7', fontSize: 16, marginBottom: 12 },
+  statusBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
   },
-  logoutText: { color: '#fff', fontWeight: '700' },
+  statusText: {
+    color: '#1B5E20',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 
-  metricsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginTop: 12 },
-  pill: { flex: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
-  pillLabel: { fontSize: 12, marginBottom: 4 },
-  pillValue: { fontSize: 16, fontWeight: '700' },
+  floatingLogoutBtn: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: '#ef2a07',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    zIndex: 1000,
+  },
+  floatingLogoutText: { 
+    color: '#fff', 
+    fontWeight: '700', 
+    fontSize: 14,
+    textAlign: 'center',
+  },
 
-  quickRow: {
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 24,
+    marginHorizontal: 20,
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  infoCardTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: PALETTE.text900,
+    marginBottom: 20,
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  infoItem: {
+    width: screenWidth < 400 ? '100%' : '48%', // Responsive: full width on small screens
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: PALETTE.text600,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: PALETTE.text900,
+  },
+
+  metricsRow: {
     flexDirection: 'row',
     gap: 12,
+    paddingHorizontal: 20,
+    marginTop: 24,
+  },
+  pill: { 
+    flex: 1, 
+    borderRadius: 16, 
+    paddingVertical: 16, 
     paddingHorizontal: 16,
-    marginTop: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  pillLabel: { fontSize: 13, marginBottom: 6, fontWeight: '600' },
+  pillValue: { fontSize: 20, fontWeight: '800' },
+
+  quickActionsContainer: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+  },
+  quickActionsTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: PALETTE.text900,
+    marginBottom: 20,
+  },
+  quickActionsGrid: {
+    gap: 12,
   },
   quickBtn: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  quickIcon: { fontSize: 18, marginBottom: 4 },
-  quickLabel: { fontWeight: '700', color: PALETTE.text900 },
-
-  searchWrap: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginTop: 12,
+  quickBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
   },
-  search: {
+  quickIcon: { 
+    fontSize: 22,
+  },
+  quickBtnContent: {
     flex: 1,
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    color: PALETTE.text900,
   },
-  clearBtn: {
-    height: 44,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+  quickLabel: {
+    fontWeight: '700',
+    color: PALETTE.text900,
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  quickDescription: {
+    fontSize: 13,
+    color: PALETTE.text600,
+    lineHeight: 18,
+  },
+  quickBtnArrow: {
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clearText: { color: PALETTE.text600, fontWeight: '600' },
+  arrowIcon: {
+    fontSize: 20,
+    color: PALETTE.text600,
+    fontWeight: '600',
+  },
 
-  sectionHeader: { paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: PALETTE.text900 },
-
-  card: {
-    marginHorizontal: 16,
-    marginVertical: 8,
+  recentActivityContainer: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  recentActivityTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: PALETTE.text900,
+    marginBottom: 20,
+  },
+  activityList: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    padding: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    overflow: 'hidden',
   },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontWeight: '800', fontSize: 15, color: PALETTE.text900 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '700' },
-
-  cardGrid: {
-    marginTop: 8,
+  activityItem: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  kv: {
-    width: '48%',
-    backgroundColor: '#F8FAFC',
+  activityIcon: {
+    width: 44,
+    height: 44,
     borderRadius: 10,
-    paddingVertical: 8,
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  activityIconText: {
+    fontSize: 22,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontWeight: '700',
+    fontSize: 15,
+    color: PALETTE.text900,
+    marginBottom: 4,
+  },
+  activitySubtitle: {
+    fontSize: 13,
+    color: PALETTE.text600,
+    lineHeight: 18,
+  },
+  activityStatus: {
     paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
   },
-  kvLabel: { fontSize: 11, color: PALETTE.text600, marginBottom: 2 },
-  kvValue: { fontWeight: '700', color: PALETTE.text900 },
-
-  loader: { paddingTop: 48, alignItems: 'center' },
-  loaderText: { marginTop: 8, color: PALETTE.text600 },
-
-  empty: { paddingTop: 40, alignItems: 'center', paddingHorizontal: 24 },
-  emptyTitle: { fontWeight: '800', fontSize: 16, color: PALETTE.text900 },
-  emptySub: { color: PALETTE.text600, marginTop: 6, textAlign: 'center' },
-  retryBtn: {
-    marginTop: 14,
-    backgroundColor: '#111827',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+  activityStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
   },
-  retryText: { color: '#fff', fontWeight: '700' },
+
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyStateIcon: {
+    fontSize: 56,
+    marginBottom: 20,
+    opacity: 0.6,
+  },
+  emptyStateTitle: {
+    fontWeight: '700',
+    fontSize: 18,
+    color: PALETTE.text900,
+    marginBottom: 10,
+  },
+  emptyStateSubtitle: {
+    color: PALETTE.text600,
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+
+  loader: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  loaderText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: PALETTE.text600,
+    fontWeight: '500',
+  },
 });
+

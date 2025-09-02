@@ -1,828 +1,605 @@
 /* eslint-disable react-native/no-inline-styles */
-/* eslint-disable react/no-unstable-nested-components */
-import React, {
-  memo,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useEffect,
-} from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
-  StyleSheet,
-  Pressable,
   Text,
-  Image,
-  SafeAreaView,
-  StatusBar,
+  StyleSheet,
   ScrollView,
-  useWindowDimensions,
+  Pressable,
   RefreshControl,
-  Modal,
-  Animated,
-  Easing,
+  StatusBar,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import NetInfo from '@react-native-community/netinfo';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/actions/authActions';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
-import type { RootState } from '../../redux/store';
+import { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
+import { getTripCounts, type TripCounts } from '../../services/trips';
+import { fetchFishLots, type FishLot } from '../../services/lots';
+import { getUser, type User } from '../../services/users';
 import PALETTE from '../../theme/palette';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { getUser } from '../../services/users';
 
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishermanHome'>;
 
-/** Icons typed as string → fixes glyphMap/overload TS errors */
-type IconName = string;
-
-const ActionCard = memo(
-  ({
-    label,
-    icon,
-    onPress,
-    style,
-  }: {
-    label: string;
-    icon: IconName;
-    onPress: () => void;
-    style?: any;
-  }) => (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionCard,
-        style,
-        pressed && { transform: [{ scale: 0.98 }], opacity: 0.96 },
-      ]}
-      android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <MaterialIcons name={icon} size={28} style={styles.actionIconMI} />
-      <Text style={styles.actionLabel} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  ),
-);
-
-
-const Chip = ({
-  color,
-  bg,
-  icon,
-  children,
-}: {
-  color: string;
-  bg: string;
-  icon?: IconName;
-  children: React.ReactNode;
-}) => (
-  <View style={[styles.chip, { backgroundColor: bg, borderColor: bg }]}>
-    {icon ? (
-      <MaterialIcons
-        name={icon}
-        size={14}
-        color={color}
-        style={{ marginRight: 6 }}
-      />
-    ) : null}
-    <Text style={[styles.chipText, { color }]} numberOfLines={1}>
-      {children}
-    </Text>
-  </View>
-);  
-
-const Row = ({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value?: React.ReactNode;
-  icon?: IconName;
-}) => (
-  <View style={styles.row}>
-    <View style={styles.rowLeft}>
-      {icon ? (
-        <MaterialIcons
-          name={icon}
-          size={18}
-          color={PALETTE.green700}
-          style={{ marginRight: 8 }}
-        />
-      ) : null}
-      <Text style={styles.rowLabel}>{label}</Text>
-    </View>
-    <View style={{ flexShrink: 1 }}>
-      {typeof value === 'string' ? (
-        <Text style={styles.rowValue} numberOfLines={1}>
-          {value || '—'}
-        </Text>
-      ) : (
-        value
-      )}
-    </View>
-  </View>
-);
-
-/** Bottom sheet confirm (no Alert) */
-const useBottomSheet = () => {
-  const [visible, setVisible] = useState(false);
-  const slide = useRef(new Animated.Value(0)).current;
-  const open = () => {
-    setVisible(true);
-    Animated.timing(slide, {
-      toValue: 1,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  };
-  const close = () => {
-    Animated.timing(slide, {
-      toValue: 0,
-      duration: 160,
-      easing: Easing.in(Easing.ease),
-      useNativeDriver: true,
-    }).start(({ finished }) => finished && setVisible(false));
-  };
-  const translateY = slide.interpolate({
-    inputRange: [0, 1],
-    outputRange: [280, 0],
-  });
-  return { visible, open, close, translateY };
-};
+const APPBAR_BG = '#1f720d';
 
 export default function FishermanHome() {
   const dispatch = useDispatch();
   const navigation = useNavigation<Nav>();
-  const { width } = useWindowDimensions();
-  const isNarrow = width < 380;
 
-  const auth = useSelector((s: RootState) => (s as any).auth);
-  const authUser = auth?.user;
-  console.log('AuthUser in FishermanHome:', authUser);
+  const [online, setOnline] = useState<boolean>(true);
+  const [counts, setCounts] = useState<TripCounts | null>(null);
+  const [lots, setLots] = useState<FishLot[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [errText, setErrText] = useState<string | null>(null);
 
-  /** ✔ useMemo so eslint doesn’t warn about changing deps */
-  const profile = useMemo(
-    () => authUser?.profile ?? authUser ?? {},
-    [authUser],
-  );
-
-  const [details, setDetails] = useState<any>(profile);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  /** keep local details in sync with profile changes from Redux */
+  // Connectivity banner
   useEffect(() => {
-    setDetails(profile);
-  }, [profile]);
+    const unsub = NetInfo.addEventListener(state => setOnline(!!state.isConnected));
+    NetInfo.fetch().then(s => setOnline(!!s.isConnected)).catch(() => {});
+    return () => { unsub && unsub(); };
+  }, []);
 
-  const name =
-    details?.name ||
-    `${details?.first_name ?? ''} ${details?.last_name ?? ''}`.trim() ||
-    'Fisherman';
-  const phone = details?.phone ?? '—';
-  const email = details?.email ?? '—';
-  const isActive = details?.is_active ?? true;
-
-  const { visible, open, close, translateY } = useBottomSheet();
-
-  /** Only fetch on pull-to-refresh.
-   * This avoids “Access denied” on mount if token/permission isn’t ready yet. */
-  // inside FishermanHome
-  const fetchUser = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrText(null);
     try {
-      setRefreshing(true);
-      setError(null);
-      const fresh = await getUser(); // <-- no ID now
-      setDetails(fresh);
-      // optionally also update Redux:
-      // dispatch({ type: LOGIN_SUCCESS, payload: { ...authUser, profile: fresh } });
-    } catch (e: any) {
-      const msg = (e?.message || '').toLowerCase();
-      if (
-        msg.includes('unauthorized') ||
-        msg.includes('forbidden') ||
-        msg.includes('permission') ||
-        e?.status === 401 ||
-        e?.status === 403
-      ) {
-        setError('Access denied. Please re-login or contact support.');
-      } else {
-        setError(e?.message || 'Failed to load user.');
+      const [tripCountsRes, lotsRes, userRes] = await Promise.allSettled([
+        getTripCounts(),
+        fetchFishLots({ page: 1, per_page: 10 }),
+        getUser(),
+      ]);
+
+      if (tripCountsRes.status === 'fulfilled') {
+        setCounts(tripCountsRes.value.totals);
       }
+      if (lotsRes.status === 'fulfilled') {
+        setLots(lotsRes.value.items);
+      }
+      if (userRes.status === 'fulfilled') {
+        setUser(userRes.value);
+      }
+    } catch (e: any) {
+      setErrText(e?.message || 'Failed to load data');
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   }, []);
 
-  /** Header with a visible logout button */
-  const HeaderLogoutButton = useMemo(
-    () => () =>
-      (
+  // Reload when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData]);
+
+  const confirmLogout = useCallback(() => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => dispatch<any>(logout()) },
+    ]);
+  }, [dispatch]);
+
+  const goAllTrips = useCallback(() => {
+    navigation.navigate('AllTrip');
+  }, [navigation]);
+
+  const goNewTrip = useCallback(() => {
+    navigation.navigate('Trip');
+  }, [navigation]);
+
+  const goOfflineTrips = useCallback(() => {
+    navigation.navigate('OfflineTrips');
+  }, [navigation]);
+
+  const goFishingActivities = useCallback(() => {
+    navigation.navigate('FishingActivities');
+  }, [navigation]);
+
+  const goBoatsList = useCallback(() => {
+    navigation.navigate('BoatsList');
+  }, [navigation]);
+
+  const goBoatRegister = useCallback(() => {
+    navigation.navigate('BoatRegister');
+  }, [navigation]);
+
+  const goLotsList = useCallback(() => {
+    navigation.navigate('LotsList');
+  }, [navigation]);
+
+  const goProfile = useCallback(() => {
+    navigation.navigate('Profile');
+  }, [navigation]);
+
+  const activeTrips = useMemo(() => {
+    return counts?.active || 0;
+  }, [counts]);
+
+  const totalTrips = useMemo(() => {
+    return counts?.all || 0;
+  }, [counts]);
+
+  const totalLots = useMemo(() => {
+    return lots.length;
+  }, [lots]);
+
+  const name = useMemo(() => {
+    return user?.name || user?.first_name || 'Fisherman';
+  }, [user]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: PALETTE.green50 }}>
+      <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" />
+
+      {/* App Bar */}
+      <View style={styles.appbar}>
+        <View style={styles.appbarSide} />
+        <Text style={styles.appbarTitle}>Fisherman Dashboard</Text>
         <Pressable
-          onPress={open}
-          hitSlop={10}
-          style={({ pressed }) => [
-            styles.headerIconBtn,
-            pressed && { opacity: 0.8 },
-          ]}
+          onPress={confirmLogout}
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Logout"
         >
-          <MaterialIcons name="logout" size={22} color="#FFFFFF" />
+          <Icon name="logout" size={22} color="#fff" />
         </Pressable>
-      ),
-    [open],
-  );
+      </View>
 
-  useLayoutEffect(() => {
-    navigation.setOptions?.({
-      headerShown: true,
-      headerTitleAlign: 'left',
-      headerStyle: { backgroundColor: PALETTE.green700 },
-      headerTintColor: '#FFFFFF',
-      headerTitleStyle: { color: '#FFFFFF', fontWeight: '800' },
-      headerRight: HeaderLogoutButton,
-    });
-  }, [navigation, HeaderLogoutButton]);
-
-  /** Auto extras */
-  const moreKVs = useMemo(() => {
-    const kv: Array<{ k: string; v: string; icon?: IconName }> = [];
-    const add = (k: string, v?: any, icon?: IconName) => {
-      if (v === undefined || v === null || v === '') return;
-      kv.push({ k, v: String(v), icon });
-    };
-    const d = details || {};
-    add('Fishing Zone', d.fishing_zone, 'waves');
-    add(
-      'Port Location',
-      d.port_location ?? d.port ?? d.departure_port,
-      'sailing',
-    );
-    add(
-      'Boat Registration',
-      d.boat_registration ?? d.boat_registration_number,
-      'directions-boat',
-    );
-    add('Verification', d.verification_status, 'rule');
-    add('Joined', (d.created_at || '').slice(0, 10), 'event');
-    return kv;
-  }, [details]);
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={fetchUser}
-            tintColor={PALETTE.green700}
-          />
-        }
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator
+      {/* Online/Offline Banner */}
+      <View
+        style={[
+          styles.banner,
+          {
+            backgroundColor: online ? PALETTE.green50 : '#FFF7ED',
+            borderColor: online ? '#C8E6C9' : '#FED7AA',
+          },
+        ]}
       >
-        {/* Header card */}
-        <View style={[styles.headerCard, isNarrow && styles.headerCardNarrow]}>
-          <View style={[styles.headerLeft, isNarrow && { width: '100%' }]}>
-            <Image
-              source={require('../../assets/images/placeholderIMG.png')}
-              style={[styles.avatar, isNarrow && styles.avatarSm]}
-            />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.eyebrow} numberOfLines={1}>
-                Welcome back
-              </Text>
+        <Icon
+          name={online ? 'wifi' : 'wifi-off'}
+          size={18}
+          color={online ? PALETTE.green700 : PALETTE.warn}
+        />
               <Text
-                style={styles.title}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
-              >
-                {name}
+          style={{
+            marginLeft: 8,
+            color: online ? PALETTE.green700 : PALETTE.warn,
+            flex: 1,
+          }}
+        >
+          {online ? 'Online — live data enabled' : 'Offline — showing cached/limited data'}
               </Text>
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-              >
-                {/* Edit Profile pill (with icon) */}
                 <Pressable
-                  onPress={() => navigation.navigate('Profile')}
-                  style={({ pressed }) => [
-                    styles.editPill,
-                    pressed && { opacity: 0.9 },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit Profile"
-                >
-                  <MaterialIcons
-                    name="edit"
-                    size={16}
-                    color={PALETTE.green700}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={styles.editPillText}>Edit Profile</Text>
+          onPress={onRefresh}
+          style={({ pressed }) => [styles.refreshChip, pressed && { opacity: 0.85 }]}
+        >
+          <Icon name="refresh" size={16} color={PALETTE.text700} />
+          <Text style={{ color: PALETTE.text700, marginLeft: 6 }}>Refresh</Text>
                 </Pressable>
               </View>
 
-              <Text style={styles.introText}>
-                You're logged into the Marine Fisheries Department Portal.
-                Here's your dashboard overview.
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 28 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Welcome / Header Card */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={styles.avatar}>
+              <Icon name="sailing" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.h1}>Welcome back, {name}!</Text>
+              <Text style={styles.subtle}>
+                You're logged into the Marine Fisheries Department Portal as a Fisherman.
               </Text>
             </View>
           </View>
+
+          <View style={styles.quickRow}>
+            <Chip icon="verified-user" label="Secure" tone="ok" />
+            <Chip icon="speed" label="Fast access" tone="info" />
+            <Chip icon="integration-instructions" label="API connected" tone={online ? 'ok' : 'warn'} />
+          </View>
         </View>
 
-        {/* Permission/banner if needed */}
-        {!authUser?.token && (
-          <View style={styles.warnBanner}>
-            <MaterialIcons name="lock" size={16} color="#92400E" />
-            <Text style={styles.warnText}>
-              No token present. Some actions may be restricted.
-            </Text>
-            <Pressable onPress={() => dispatch<any>(logout())}>
-              <Text style={styles.warnAction}>Re-login</Text>
+        {/* Profile Card */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Your Profile</Text>
+
+          <Row icon="person" label="Full Name" value={name} />
+          <Row icon="mail" label="Email Address" value={user?.email || '—'} />
+          <Row icon="phone" label="Phone Number" value={user?.phone || '—'} />
+
+          <View style={[styles.row, { marginTop: 8 }]}>
+            <Icon name="verified" size={18} color={PALETTE.green700} style={{ marginRight: 10 }} />
+            <Text style={styles.rowLabel}>Account Status</Text>
+            <View style={{ flex: 1 }} />
+            <StatusPill text="Active" tone="ok" />
+          </View>
+
+          <View style={styles.divider} />
+
+          <Row icon="waves" label="Fishing Zone" value={user?.fishing_zone || 'Not specified'} />
+          <Row icon="location-on" label="Port Location" value={user?.port_location || 'Not specified'} />
+          <Row icon="directions-boat" label="Boat Registration" value={user?.boat_registration_number || 'Not registered'} />
+        </View>
+
+        {/* Trips Overview */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trips Overview</Text>
+            <Pressable onPress={goAllTrips} style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}>
+              <Icon name="list" size={18} color={PALETTE.info} />
+              <Text style={{ color: PALETTE.info, marginLeft: 6, fontWeight: '600' }}>View all</Text>
             </Pressable>
           </View>
-        )}
 
-        {/* Fisherman Details */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Fisherman Details</Text>
-          <View style={styles.detailsCard}>
             {loading ? (
-              <>
-                <View style={styles.skelRow} />
-                <View style={styles.skelRow} />
-                <View style={styles.skelRow} />
-              </>
-            ) : (
-              <>
-                <Row label="Full Name" value={name} icon="badge" />
-                <Row label="Email Address" value={email} icon="mail-outline" />
-                <Row label="Phone Number" value={phone} icon="call" />
-                <Row
-                  label="Account Status"
-                  icon="shield"
-                  value={
-                    <View style={{ flexDirection: 'row' }}>
-                      <Chip
-                        bg={isActive ? '#E0F2FE' : '#FEE2E2'}
-                        color={isActive ? '#075985' : '#991B1B'}
-                        icon={isActive ? 'check-circle' : 'cancel'}
-                      >
-                        {isActive ? 'Active' : 'Inactive'}
-                      </Chip>
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={PALETTE.green700} />
+              <Text style={{ color: PALETTE.text600, marginTop: 8 }}>Loading stats…</Text>
+            </View>
+          ) : errText ? (
+            <View style={{ paddingVertical: 8 }}>
+              <Text style={{ color: PALETTE.warn }}>{errText}</Text>
+            </View>
+          ) : (
+            <View style={styles.statGrid}>
+              <StatCard icon="inbox" label="All Trips" value={totalTrips} onPress={goAllTrips} />
+              <StatCard icon="navigation" label="Active Trips" value={activeTrips} onPress={goAllTrips} tone="info" />
+              <StatCard icon="add-location-alt" label="New Trip" value="+" onPress={goNewTrip} tone="ok" />
                     </View>
-                  }
-                />
-              </>
-            )}
+          )}
+        </View>
 
-            {moreKVs.length > 0 && (
-              <View style={styles.kvGrid}>
-                {moreKVs.map(({ k, v, icon }) => (
-                  <View key={k} style={styles.kvItem}>
-                    <Text style={styles.kvLabel} numberOfLines={1}>
-                      {icon ? (
-                        <MaterialIcons
-                          name={icon}
-                          size={14}
-                          color={PALETTE.text600}
-                        />
-                      ) : null}
-                      {icon ? ' ' : ''}
-                      {k}
-                    </Text>
-                    <Text style={styles.kvValue} numberOfLines={1}>
-                      {v}
-                    </Text>
+        {/* Species Overview */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Species</Text>
+            <Pressable onPress={goLotsList} style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}>
+              <Icon name="list" size={18} color={PALETTE.info} />
+              <Text style={{ color: PALETTE.info, marginLeft: 6, fontWeight: '600' }}>View all</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.statGrid}>
+            <StatCard icon="set-meal" label="All Species" value={totalLots} onPress={goLotsList} />
+          </View>
+        </View>
+
+        {/* Boats Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Boats</Text>
+          <Text style={styles.subtle}>Manage your fishing vessels and registrations</Text>
+
+          <View style={styles.actionGrid}>
+            <ActionTile
+              icon="directions-boat"
+              title="All Boats"
+              subtitle="View your registered boats"
+              onPress={goBoatsList}
+            />
+            <ActionTile
+              icon="add-circle"
+              title="Register Boat"
+              subtitle="Add new fishing vessel"
+              onPress={goBoatRegister}
+            />
                   </View>
-                ))}
               </View>
-            )}
+
+        {/* Activities Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Fishing Activities</Text>
+          <Text style={styles.subtle}>Track your fishing activities and species</Text>
+
+          <View style={styles.actionGrid}>
+            <ActionTile
+              icon="surfing"
+              title="All Activities"
+              subtitle="View fishing activities"
+              onPress={goFishingActivities}
+            />
           </View>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.section}>
+        <View style={styles.card}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsList}>
-            <ActionCard
-              label="Offline Trips"
+
+          <View style={styles.actionGrid}>
+            <ActionTile
               icon="cloud-off"
-              onPress={() => navigation.navigate('OfflineTrips' as any)}
+              title="Offline Trips"
+              subtitle="View offline trip data"
+              onPress={goOfflineTrips}
             />
-            <ActionCard
-              label="All Trips"
+            <ActionTile
               icon="room-service"
-              onPress={() => navigation.navigate('AllTrip')}
+              title="All Trips"
+              subtitle="Browse all your trips"
+              onPress={goAllTrips}
             />
-            
-            <ActionCard
-              label="+ New Trip"
+            <ActionTile
               icon="add-location-alt"
-              onPress={() => navigation.navigate('Trip')}
+              title="New Trip"
+              subtitle="Start a new fishing trip"
+              onPress={goNewTrip}
             />
-            <ActionCard
-              label="All Activities"
-              icon="surfing"
-              onPress={() => navigation.navigate('FishingActivities')}
-            />
-            {/* <ActionCard
-              label="All Species"
-              icon="set-meal"
-              onPress={() => navigation.navigate('LotsList')}
-            /> */}
-            <ActionCard
-              label="All Boats"
-              icon="directions-boat"
-              onPress={() => navigation.navigate('BoatsList')}
-            />
-            <ActionCard
-              label="Register Boat"
-              icon="add-circle"
-              onPress={() => navigation.navigate('BoatRegister')}
+            <ActionTile
+              icon="edit"
+              title="Edit Profile"
+              subtitle="Update your information"
+              onPress={goProfile}
             />
           </View>
-
-          {error ? (
-            <View style={styles.errorToast}>
-              <MaterialIcons name="error-outline" size={16} color="#991B1B" />
-              <Text style={styles.errorToastText} numberOfLines={2}>
-                {error}
-              </Text>
-              <Pressable onPress={fetchUser} hitSlop={10}>
-                <Text style={styles.errorToastRetry}>Retry</Text>
-              </Pressable>
-            </View>
-          ) : null}
         </View>
-      </ScrollView>
 
-      {/* Floating fallback logout (always visible) */}
+        {/* Logout (secondary) */}
       <Pressable
-        onPress={open}
-        style={({ pressed }) => [
-          styles.fabLogout,
-          pressed && { opacity: 0.85 },
-        ]}
-        accessibilityLabel="Logout"
-      >
-        <MaterialIcons name="logout" size={22} color="#FFFFFF" />
+          onPress={confirmLogout}
+          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
+        >
+          <Icon name="logout" size={18} color="#fff" />
+          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
       </Pressable>
 
-      {/* Bottom Sheet Confirm Logout */}
-      <Modal
-        visible={visible}
-        transparent
-        animationType="fade"
-        onRequestClose={close}
-      >
-        <Pressable style={styles.sheetBackdrop} onPress={close} />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Log out?</Text>
-          <Text style={styles.sheetBody}>
-            You will be signed out of the Marine Fisheries Department app.
-          </Text>
-          <View style={styles.sheetActions}>
-            <Pressable
-              onPress={close}
-              style={({ pressed }) => [
-                styles.sheetBtn,
-                styles.sheetBtnSecondary,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <Text style={styles.sheetBtnSecondaryText}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                close();
-                setTimeout(() => dispatch<any>(logout()), 120);
-              }}
-              style={({ pressed }) => [
-                styles.sheetBtn,
-                styles.sheetBtnDanger,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <MaterialIcons
-                name="logout"
-                size={18}
-                color="#FFFFFF"
-                style={{ marginRight: 6 }}
-              />
-              <Text style={styles.sheetBtnDangerText}>Logout</Text>
-            </Pressable>
+        {/* Footer space */}
+        <View style={{ height: 16 }} />
+      </ScrollView>
           </View>
-        </Animated.View>
-      </Modal>
-    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: PALETTE.surface },
+/* -------------------- tiny UI atoms -------------------- */
+function Row({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <View style={styles.row}>
+      <Icon name={icon} size={18} color={PALETTE.text600} style={{ marginRight: 10 }} />
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={{ flex: 1 }} />
+      <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
 
-  scroll: { flex: 1, backgroundColor: PALETTE.surface },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 24 + (Platform.OS === 'ios' ? 8 : 0),
-    rowGap: 20,
-    flexGrow: 1,
-  },
-  editPill: {
+function StatusPill({ text, tone = 'ok' }: { text: string; tone?: 'ok' | 'warn' | 'error' | 'info' }) {
+  const colors = {
+    ok: { bg: '#E8F5E9', fg: PALETTE.green700 },
+    warn: { bg: '#FFF4E5', fg: PALETTE.warn },
+    error: { bg: '#FFEBEE', fg: PALETTE.error },
+    info: { bg: '#E3F2FD', fg: PALETTE.info },
+  }[tone];
+  return (
+    <View style={{ backgroundColor: colors.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+      <Text style={{ color: colors.fg, fontWeight: '700' }}>{text}</Text>
+    </View>
+  );
+}
+
+function Chip({ icon, label, tone = 'default' }: { icon?: string; label: string; tone?: 'ok'|'warn'|'error'|'info'|'default' }) {
+  const bg =
+    tone === 'ok' ? '#E8F5E9' :
+    tone === 'warn' ? '#FFF4E5' :
+    tone === 'error' ? '#FFEBEE' :
+    tone === 'info' ? '#E3F2FD' : '#F1F5F9';
+  const color =
+    tone === 'ok' ? PALETTE.green700 :
+    tone === 'warn' ? PALETTE.warn :
+    tone === 'error' ? PALETTE.error :
+    tone === 'info' ? PALETTE.info : PALETTE.text700;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+      {icon ? <Icon name={icon} size={14} color={color} style={{ marginRight: 6 }} /> : null}
+      <Text style={{ color, fontSize: 12 }}>{label}</Text>
+    </View>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  onPress,
+  tone = 'default',
+}: {
+  icon: string;
+  label: string;
+  value: number | string;
+  onPress?: () => void;
+  tone?: 'default' | 'ok' | 'warn' | 'error' | 'info';
+}) {
+  const toneBg = {
+    default: PALETTE.surface,
+    ok: '#F0FDF4',
+    warn: '#FFF7ED',
+    error: '#FEF2F2',
+    info: '#EFF6FF',
+  }[tone];
+  const toneIcon = {
+    default: PALETTE.text600,
+    ok: PALETTE.green700,
+    warn: PALETTE.warn,
+    error: PALETTE.error,
+    info: PALETTE.info,
+  }[tone];
+
+  return (
+            <Pressable
+      onPress={onPress}
+              style={({ pressed }) => [
+        styles.statCard,
+        { backgroundColor: toneBg, borderColor: PALETTE.border },
+        pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] },
+      ]}
+    >
+      <Icon name={icon} size={20} color={toneIcon} />
+      <Text style={{ color: PALETTE.text700, marginTop: 6 }}>{label}</Text>
+      <Text style={{ color: PALETTE.text900, fontWeight: '800', fontSize: 18, marginTop: 2 }}>
+        {value}
+      </Text>
+            </Pressable>
+  );
+}
+
+function ActionTile({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress?: () => void;
+}) {
+  return (
+            <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] }]}
+    >
+      <View style={styles.tileIcon}>
+        <Icon name={icon} size={20} color="#fff" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: PALETTE.text900, fontWeight: '700' }}>{title}</Text>
+        <Text style={{ color: PALETTE.text600, marginTop: 2 }}>{subtitle}</Text>
+      </View>
+      <Icon name="chevron-right" size={22} color={PALETTE.text600} />
+            </Pressable>
+  );
+}
+
+/* -------------------- styles -------------------- */
+const styles = StyleSheet.create({
+  appbar: {
+    backgroundColor: APPBAR_BG,
+    paddingTop: Platform.OS === 'ios' ? 10 : 0,
+    height: 56 + (Platform.OS === 'ios' ? 10 : 0),
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  editPillText: { color: PALETTE.green700, fontWeight: '800', fontSize: 12 },
-
-  headerCard: {
-    backgroundColor: PALETTE.green700,
-    borderRadius: 16,
+  appbarSide: { width: 40, height: 40 },
+  appbarTitle: { color: '#fff', fontSize: 18, fontWeight: '700', flex: 1, textAlign: 'center' },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  refreshChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PALETTE.surface,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  card: {
+    backgroundColor: PALETTE.surface,
+    marginHorizontal: 14,
+    marginTop: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: PALETTE.border,
     padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 12,
-    rowGap: 8,
-    flexWrap: 'nowrap',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  introText: { marginTop: 6, fontSize: 13, color: '#FFFFFF', opacity: 0.85 }, // NEW line
-
-  headerCardNarrow: { flexDirection: 'column', alignItems: 'stretch' },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 12,
-    flexShrink: 1,
-  },
-  // headerIconBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10 },
-  avatar: { height: 56, width: 56, borderRadius: 28 },
-  avatarSm: { height: 48, width: 48, borderRadius: 24 },
-  eyebrow: {
-    color: 'white',
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  title: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 22,
-    marginTop: 2,
-    flexShrink: 1,
-  },
-  rolePill: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    backgroundColor: PALETTE.green50,
-    maxWidth: '100%',
-  },
-  roleText: { color: PALETTE.green700, fontWeight: '700', fontSize: 12 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', columnGap: 8 },
-  headerRightStack: {
-    width: '100%',
-    marginTop: 6,
-    justifyContent: 'flex-start',
-  },
-
-  section: {},
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: PALETTE.green700,
-    marginLeft: 5,
-    marginBottom: 10,
-  },
-
-  detailsCard: {
-    alignSelf: 'stretch',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  row: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: PALETTE.border,
+  h1: { color: PALETTE.text900, fontSize: 20, fontWeight: '800' },
+  subtle: { color: PALETTE.text600, marginTop: 4 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  sectionTitle: { color: PALETTE.text900, fontSize: 16, fontWeight: '800', flex: 1 },
+  linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    columnGap: 12,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
   },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
-  rowLabel: { color: PALETTE.text900, fontWeight: '600', fontSize: 14 },
-  rowValue: { color: PALETTE.text600, fontSize: 14, textAlign: 'right' },
-
-  kvGrid: {
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  rowLabel: { color: PALETTE.text600 },
+  rowValue: { color: PALETTE.text900, fontWeight: '700', maxWidth: '60%' },
+  divider: { height: 1, backgroundColor: PALETTE.border, marginVertical: 10 },
+  statGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingVertical: 10,
+    marginTop: 8,
+    gap: 10,
   },
-  kvItem: {
-    padding: 10,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    minWidth: '46%',
+  statCard: {
+    width: '30%',
+    minWidth: 110,
     flexGrow: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
   },
-  kvLabel: { fontSize: 12, color: PALETTE.text600, marginBottom: 4 },
-  kvValue: { fontSize: 14, color: PALETTE.text900, fontWeight: '600' },
-
-  chip: {
+  actionGrid: { marginTop: 10 },
+  tile: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    maxWidth: '100%',
-  },
-  chipText: { fontSize: 12, fontWeight: '700' },
-
-  actionsList: { gap: 12 },
-  actionCard: {
-    backgroundColor: PALETTE.surface,
-    borderRadius: 16,
-    paddingHorizontal: 22,
-    paddingVertical: 18,
-    alignItems: 'center',
+    gap: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: PALETTE.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  actionIconMI: { marginBottom: 6, color: PALETTE.green700 },
-  actionLabel: {
-    fontSize: 15,
-    color: PALETTE.green700,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-
-  errorToast: {
-    marginTop: 10,
-    marginHorizontal: 12,
-    padding: 10,
+    backgroundColor: PALETTE.surface,
     borderRadius: 12,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    marginBottom: 10,
   },
-  errorToastText: { color: '#991B1B', flex: 1, fontSize: 13 },
-  errorToastRetry: {
-    color: '#991B1B',
-    fontWeight: '800',
-    textDecorationLine: 'underline',
+  tileIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: PALETTE.green700,
+    alignItems: 'center', justifyContent: 'center',
   },
-
-  /* Warning banner (token/permission) */
-  warnBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 10,
-    borderRadius: 12,
-  },
-  warnText: { color: '#92400E', flex: 1, fontSize: 12 },
-  warnAction: {
-    color: '#92400E',
-    fontWeight: '800',
-    textDecorationLine: 'underline',
-  },
-
-  /* Header Logout button (in headerRight) */
-  headerLogoutBtn: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  headerLogoutText: { color: '#FFFFFF', fontWeight: '800' },
-  headerIconBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10 },
-
-  /* Floating logout (fallback to guarantee visibility) */
-  fabLogout: {
-    position: 'absolute',
-    right: 16,
-    bottom: 20,
-    backgroundColor: '#DC2626',
-    height: 44,
-    width: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-  },
-
-  /* Bottom sheet */
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 20,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-    marginBottom: 12,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: PALETTE.text900,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  sheetBody: { color: PALETTE.text600, textAlign: 'center', marginBottom: 16 },
-  sheetActions: { flexDirection: 'row', gap: 10 },
-  sheetBtn: {
-    flex: 1,
+  logoutBtn: {
+    marginHorizontal: 14, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: PALETTE.error,
   },
-  sheetBtnSecondary: { backgroundColor: '#F3F4F6' },
-  sheetBtnDanger: { backgroundColor: '#DC2626' },
-  sheetBtnSecondaryText: { color: '#111827', fontWeight: '800' },
-  sheetBtnDangerText: { color: '#FFFFFF', fontWeight: '800' },
-  /* Skeletons */
-  skelRow: {
-    height: 20,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    marginVertical: 8,
+  avatar: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: PALETTE.green700,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
   },
 });
