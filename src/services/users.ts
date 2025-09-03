@@ -55,6 +55,40 @@ export type CreateUserBody = {
   phone?: string;
   is_verified?: boolean;
   is_active?: boolean;
+  
+  // Personal Information
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  
+  // Fisherman Details
+  boat_registration_number?: string;
+  fishing_zone?: string;
+  port_location?: string;
+  
+  // FCS Details
+  fcs_name?: string;
+  fcs_license_number?: string;
+  fcs_address?: string;
+  fcs_phone?: string;
+  fcs_email?: string;
+  
+  // Middleman Details
+  company_name?: string;
+  fcs_license_number_middleman?: string;
+  business_address?: string;
+  business_phone?: string;
+  business_email?: string;
+  
+  // Exporter Details
+  company_name_exporter?: string;
+  export_license_number?: string;
+  business_address_exporter?: string;
+  business_phone_exporter?: string;
+  business_email_exporter?: string;
+  
+  // MFD Details
+  mfd_employee_id?: string;
 };
 
 /** Include all fields your Profile screen can edit */
@@ -109,6 +143,49 @@ export async function createUser(body: CreateUserBody) {
   const json = await api('/users', { method: 'POST', body: stripUndefined(body) });
   return unwrap<User>(json);
 }
+
+// Special function for user registration that doesn't require authentication
+export async function registerUser(body: CreateUserBody) {
+  const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
+  const url = `${BASE_URL}/users`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(stripUndefined(body)),
+  });
+
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  const text = await response.text();
+
+  let json: any = null;
+  if (contentType.includes('application/json')) {
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {}
+  }
+
+  if (!response.ok) {
+    const msg = json?.message || (text ? text.slice(0, 200) : `HTTP ${response.status}`);
+    const err: any = new Error(msg);
+    err.status = response.status;
+    err.response = json ?? text;
+    throw err;
+  }
+
+  if (!json) throw new Error('Invalid server response (expected JSON).');
+
+  if (json.success === false) {
+    const msg = json.message || (json.errors ? Object.values(json.errors).flat()?.join('\n') : 'Request failed');
+    throw new Error(msg);
+  }
+
+  return unwrap<User>(json);
+}
 export async function updateUser(id: ID, body: UpdateUserBody) {
   const json = await api(`/users/${id}`, { method: 'PUT', body: stripUndefined(body) });
   return unwrap<User>(json);
@@ -154,7 +231,7 @@ export async function updateMe(body: UpdateUserBody): Promise<User> {
   } catch (e: any) {
     // If your server only allows PATCH for /user, retry seamlessly.
     if (e?.status === 405) {
-      const json = await api('/user', { method: 'PATCH', body: clean });
+      const json = await api('/user', { method: 'PUT', body: clean });
       return unwrap<User>(json);
     }
     throw e;

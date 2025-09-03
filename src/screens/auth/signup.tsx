@@ -16,6 +16,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../../types';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { registerUser, type CreateUserBody } from '../../services/users';
 
 /* ===== Theme ===== */
 const GREEN = '#1f720d';
@@ -176,14 +177,83 @@ const SignUp = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!validateForm()) return;
     
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // Prepare the user data for API
+      const userData: CreateUserBody = {
+        name: formData.displayName,
+        email: formData.email,
+        password: formData.password,
+        user_type: formData.userType?.toLowerCase(),
+        phone: formData.phoneNumber,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        display_name: formData.displayName,
+        is_verified: false,
+        is_active: true,
+      };
+
+      // Add user-type specific fields
+      if (formData.userType === 'Fisherman') {
+        userData.boat_registration_number = formData.boatRegistrationNumber;
+        userData.fishing_zone = formData.fishingZone;
+        userData.port_location = formData.portLocation;
+      }
+
+      if (formData.userType === 'FCS') {
+        userData.fcs_name = formData.fcsName;
+        userData.fcs_license_number = formData.fcsLicenseNumber;
+        userData.fcs_address = formData.fcsAddress;
+        userData.fcs_phone = formData.fcsPhone;
+        userData.fcs_email = formData.fcsEmail;
+      }
+
+      if (formData.userType === 'Middleman') {
+        userData.company_name = formData.companyName;
+        userData.fcs_license_number_middleman = formData.fcsLicenseNumberMiddleman;
+        userData.business_address = formData.businessAddress;
+        userData.business_phone = formData.businessPhone;
+        userData.business_email = formData.businessEmail;
+      }
+
+      if (formData.userType === 'Exporter') {
+        userData.company_name_exporter = formData.companyNameExporter;
+        userData.export_license_number = formData.exportLicenseNumber;
+        userData.business_address_exporter = formData.businessAddressExporter;
+        userData.business_phone_exporter = formData.businessPhoneExporter;
+        userData.business_email_exporter = formData.businessEmailExporter;
+      }
+
+      if (formData.userType === 'MFD') {
+        userData.mfd_employee_id = formData.mfdEmployeeId;
+      }
+
+      // Call the API
+      await registerUser(userData);
+      
+      Alert.alert(
+        'Success', 
+        `Account created successfully for ${formData.displayName} (${formData.userType})`,
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Login' as any)
+          }
+        ]
+      );
+      
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      Alert.alert(
+        'Error', 
+        error?.message || 'Failed to create account. Please try again.'
+      );
+    } finally {
       setLoading(false);
-      Alert.alert('Success', `Account created successfully for ${formData.displayName} (${formData.userType})`);
-    }, 1500);
+    }
   };
 
   const renderUserTypeSection = () => (
