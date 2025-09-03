@@ -8,16 +8,10 @@ import {
   ScrollView,
   Platform,
   TextInput,
-  Image,
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
-import {
-  ImagePickerResponse,
-  launchCamera,
-  launchImageLibrary,
-} from 'react-native-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../../types';
@@ -25,570 +19,965 @@ import { StackNavigationProp } from '@react-navigation/stack';
 
 /* ===== Theme ===== */
 const GREEN = '#1f720d';
+const GREEN_LIGHT = '#E8F5E9';
 const TEXT_DARK = '#0B1220';
 const TEXT_MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
-const SURFACE = '#FFFFFF';
-const BG = '#F5F7FA';
+const PLACEHOLDER = '#9CA3AF';
 
 type Nav = StackNavigationProp<RootStackParamList, 'Login'>;
 
-/* ===== Helpers (PK formats) ===== */
-const maskCNIC = (raw: string) => {
-  const d = raw.replace(/\D/g, '').slice(0, 13);
-  const a = d.slice(0, 5);
-  const b = d.slice(5, 12);
-  const c = d.slice(12);
-  let out = a;
-  if (b) out += '-' + b;
-  if (c) out += '-' + c;
-  return out;
-};
-const maskPhonePK = (raw: string) => {
-  const d = raw.replace(/\D/g, '').slice(0, 11);
-  if (d.startsWith('03')) {
-    const a = d.slice(0, 4);
-    const b = d.slice(4);
-    return b ? `${a}-${b}` : a;
-  }
-  return d;
-};
+type UserType = 'Fisherman' | 'FCS' | 'Middleman' | 'Exporter' | 'MFD';
 
-// Put this where RoleSelector is defined (same file)
-import { useWindowDimensions } from 'react-native';
-
-function RoleSelector({
-  value,
-  onChange,
-}: {
-  value?: string;
-  onChange: (v: string) => void;
-}) {
-  const { width } = useWindowDimensions();
-  const twoCol = width < 360; // tweak breakpoint if you like
-  const pillColStyle = twoCol ? styles.rolePill2Col : styles.rolePill3Col;
-
-  const options = [
-    { id: 'Fisherman', label: 'Fisherman', icon: 'sailing' },
-    { id: 'Middleman', label: 'Middleman', icon: 'handshake' },
-    { id: 'Exporter', label: 'Exporter', icon: 'local-shipping' },
-    { id: 'MFD', label: 'MFD', icon: 'admin-panel-settings' },
-    { id: 'FCS', label: 'FCS', icon: 'account-balance' },
-  ];
-
-  return (
-    <View style={styles.rolesRow}>
-      {options.map(opt => {
-        const active = value === opt.id;
-        return (
-          <TouchableOpacity
-            key={opt.id}
-            onPress={() => onChange(opt.id)}
-            activeOpacity={0.9}
-            style={[styles.rolePill, pillColStyle, active && styles.rolePillActive]}
-            accessibilityRole="button"
-            accessibilityLabel={opt.label}
-          >
-            <MaterialIcons
-              name={opt.icon as any}
-              size={16}
-              color={active ? '#FFFFFF' : GREEN}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              style={[styles.rolePillText, active && styles.rolePillTextActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
-            >
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
+interface FormData {
+  // Account Type
+  userType: UserType | null;
+  
+  // Fisherman Details
+  boatRegistrationNumber: string;
+  fishingZone: string;
+  portLocation: string;
+  
+  // FCS Details
+  fcsName: string;
+  fcsLicenseNumber: string;
+  fcsAddress: string;
+  fcsPhone: string;
+  fcsEmail: string;
+  
+  // Middleman Details
+  companyName: string;
+  fcsLicenseNumberMiddleman: string;
+  businessAddress: string;
+  businessPhone: string;
+  businessEmail: string;
+  
+  // Exporter Details
+  companyNameExporter: string;
+  exportLicenseNumber: string;
+  businessAddressExporter: string;
+  businessPhoneExporter: string;
+  businessEmailExporter: string;
+  
+  // MFD Details
+  mfdEmployeeId: string;
+  
+  // Personal Information
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  
+  // Contact Information
+  phoneNumber: string;
+  email: string;
+  
+  // Security
+  password: string;
+  confirmPassword: string;
 }
-
 
 const SignUp = () => {
   const navigation = useNavigation<Nav>();
-  const [name, setName] = useState('');
-  const [cnic, setCnic] = useState('');
-  const [job, setJob] = useState<string | undefined>(undefined);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [email, setEmail] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [showCPass, setShowCPass] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  
+  const [formData, setFormData] = useState<FormData>({
+    userType: null,
+    boatRegistrationNumber: '',
+    fishingZone: '',
+    portLocation: '',
+    fcsName: '',
+    fcsLicenseNumber: '',
+    fcsAddress: '',
+    fcsPhone: '',
+    fcsEmail: '',
+    companyName: '',
+    fcsLicenseNumberMiddleman: '',
+    businessAddress: '',
+    businessPhone: '',
+    businessEmail: '',
+    companyNameExporter: '',
+    exportLicenseNumber: '',
+    businessAddressExporter: '',
+    businessPhoneExporter: '',
+    businessEmailExporter: '',
+    mfdEmployeeId: '',
+    firstName: '',
+    lastName: '',
+    displayName: '',
+    phoneNumber: '+92 XXX XXXXXXX',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{
-    name?: string;
-    cnic?: string;
-    email?: string;
-    password?: string;
-    confirmPassword?: string;
-    phoneNumber?: string;
-  }>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleImagePress = async () => {
-    const options: {
-      text: string;
-      onPress: () => Promise<void>;
-      style?: 'default' | 'cancel' | 'destructive';
-    }[] = [
-      {
-        text: 'Take Your Photo',
-        onPress: async () => {
-          const response = await launchCamera({ mediaType: 'photo' });
-          handleImgResponse(response);
-        },
-      },
-      {
-        text: 'Choose From Gallery',
-        onPress: async () => {
-          const response = await launchImageLibrary({ mediaType: 'photo' });
-          handleImgResponse(response);
-        },
-      },
-    ];
-    if (imageUri) {
-      options.push({
-        text: 'Remove Photo',
-        onPress: async () => setImageUri(null),
-        style: 'destructive',
-      });
+  const updateFormData = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
-    Alert.alert('Select Option', 'Choose Image Source', options);
   };
 
-  const handleImgResponse = (response: ImagePickerResponse) => {
-    if (response.didCancel || response.errorCode) return;
-    if (response.assets && response.assets.length > 0) {
-      setImageUri(response.assets[0].uri ?? null);
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    // Required fields for all users
+    if (!formData.userType) newErrors.userType = 'Please select an account type';
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
+    if (!formData.displayName.trim()) newErrors.displayName = 'Display name is required';
+    if (!formData.email.trim()) newErrors.email = 'Email is required';
+    else if (!/^\S+@\S+\.\S+$/.test(formData.email)) newErrors.email = 'Enter a valid email address';
+    if (!formData.password) newErrors.password = 'Password is required';
+    if (!formData.confirmPassword) newErrors.confirmPassword = 'Confirm password is required';
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
     }
+
+    // Conditional validation based on user type
+    if (formData.userType === 'Fisherman') {
+      if (!formData.boatRegistrationNumber.trim()) newErrors.boatRegistrationNumber = 'Boat registration number is required';
+      if (!formData.fishingZone.trim()) newErrors.fishingZone = 'Fishing zone is required';
+      if (!formData.portLocation.trim()) newErrors.portLocation = 'Port location is required';
+    }
+
+    if (formData.userType === 'FCS') {
+      if (!formData.fcsName.trim()) newErrors.fcsName = 'FCS name is required';
+      if (!formData.fcsLicenseNumber.trim()) newErrors.fcsLicenseNumber = 'FCS license number is required';
+      if (!formData.fcsAddress.trim()) newErrors.fcsAddress = 'Address is required';
+      if (!formData.fcsPhone.trim()) newErrors.fcsPhone = 'Phone is required';
+      if (!formData.fcsEmail.trim()) newErrors.fcsEmail = 'Email is required';
+    }
+
+    if (formData.userType === 'Middleman') {
+      if (!formData.companyName.trim()) newErrors.companyName = 'Company name is required';
+      if (!formData.fcsLicenseNumberMiddleman.trim()) newErrors.fcsLicenseNumberMiddleman = 'FCS license number is required';
+      if (!formData.businessAddress.trim()) newErrors.businessAddress = 'Business address is required';
+      if (!formData.businessPhone.trim()) newErrors.businessPhone = 'Business phone is required';
+      if (!formData.businessEmail.trim()) newErrors.businessEmail = 'Business email is required';
+    }
+
+    if (formData.userType === 'Exporter') {
+      if (!formData.companyNameExporter.trim()) newErrors.companyNameExporter = 'Company name is required';
+      if (!formData.exportLicenseNumber.trim()) newErrors.exportLicenseNumber = 'Export license number is required';
+      if (!formData.businessAddressExporter.trim()) newErrors.businessAddressExporter = 'Business address is required';
+      if (!formData.businessPhoneExporter.trim()) newErrors.businessPhoneExporter = 'Business phone is required';
+      if (!formData.businessEmailExporter.trim()) newErrors.businessEmailExporter = 'Business email is required';
+    }
+
+    if (formData.userType === 'MFD') {
+      if (!formData.mfdEmployeeId.trim()) newErrors.mfdEmployeeId = 'MFD employee ID is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSignUp = () => {
-    const newErrors: typeof errors = {};
-    if (!name.trim()) newErrors.name = 'Name is required.';
-    if (!cnic.trim()) newErrors.cnic = 'CNIC is required.';
-    if (!phoneNumber.trim()) newErrors.phoneNumber = 'Phone Number is required.';
-    if (!email.trim()) newErrors.email = 'Email is required.';
-    else if (!/^\S+@\S+\.\S+$/.test(email)) newErrors.email = 'Enter a valid email address.';
-    if (!password) newErrors.password = 'Password is required.';
-    if (!confirmPassword) newErrors.confirmPassword = 'Confirm your password.';
-    if (password && confirmPassword && password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match.';
-    }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (!validateForm()) return;
+    
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-
-      Alert.alert(`Signed up as: ${name} (${job || 'No role selected'})`);
-    }, 1200);
+      Alert.alert('Success', `Account created successfully for ${formData.displayName} (${formData.userType})`);
+    }, 1500);
   };
 
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.root}>
-        {/* Soft background shapes */}
-        <View style={styles.bgDecorTop} />
-        <View style={styles.bgDecorBottom} />
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-          style={{ flex: 1 }}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContainer}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+  const renderUserTypeSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <MaterialIcons name="person" size={20} color={GREEN} />
+        <Text style={styles.sectionTitle}>Account Type</Text>
+      </View>
+      <View style={styles.userTypeGrid}>
+        {(['Fisherman', 'FCS', 'Middleman', 'Exporter', 'MFD'] as UserType[]).map((type) => (
+          <TouchableOpacity
+            key={type}
+            style={[
+              styles.userTypeCard,
+              formData.userType === type && styles.userTypeCardActive
+            ]}
+            onPress={() => updateFormData('userType', type)}
           >
-            {/* Hero */}
-            <View style={styles.hero}>
-              <Image
-                source={require('../../assets/images/MFD.png')}
-                style={styles.emblem}
-                resizeMode="contain"
-              />
-              <Text style={styles.title}>Create your account</Text>
-              <Text style={styles.subtitle}>
-                Join the Marine Fisheries Portal to manage trips, activities and lots — all in one place.
-              </Text>
+            <View style={styles.radioButton}>
+              {formData.userType === type && <View style={styles.radioButtonInner} />}
             </View>
+            <Text style={[
+              styles.userTypeText,
+              formData.userType === type && styles.userTypeTextActive
+            ]}>
+              {type}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {errors.userType && <Text style={styles.errorText}>{errors.userType}</Text>}
+    </View>
+  );
 
-            {/* Form Card */}
-            <View style={styles.card}>
-              {/* Photo */}
-              <View style={styles.photoWrap}>
-                <TouchableOpacity onPress={handleImagePress} activeOpacity={0.9}>
-                  <Image
-                    style={styles.profileImage}
-                    source={
-                      imageUri
-                        ? { uri: imageUri }
-                        : require('../../assets/images/placeholderIMG.png')
-                    }
-                  />
-                  <View style={styles.cameraBadge}>
-                    <MaterialIcons name="photo-camera" size={16} color="#fff" />
+  const renderFishermanSection = () => {
+    if (formData.userType !== 'Fisherman') return null;
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="sailing" size={20} color={GREEN} />
+          <Text style={styles.sectionTitle}>Fishermen Details</Text>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Boat Registration Number *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter boat registration number"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.boatRegistrationNumber}
+              onChangeText={(value) => updateFormData('boatRegistrationNumber', value)}
+            />
+            {errors.boatRegistrationNumber && <Text style={styles.errorText}>{errors.boatRegistrationNumber}</Text>}
+          </View>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Fishing Zone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter fishing zone"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fishingZone}
+              onChangeText={(value) => updateFormData('fishingZone', value)}
+            />
+            {errors.fishingZone && <Text style={styles.errorText}>{errors.fishingZone}</Text>}
+          </View>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Port Location</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter port location"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.portLocation}
+              onChangeText={(value) => updateFormData('portLocation', value)}
+            />
+            {errors.portLocation && <Text style={styles.errorText}>{errors.portLocation}</Text>}
+          </View>
                   </View>
-                </TouchableOpacity>
-                <Text style={styles.imgText}>Tap to add your profile photo</Text>
               </View>
+    );
+  };
 
-              {/* Name */}
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="badge" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+  const renderFCSSection = () => {
+    if (formData.userType !== 'FCS') return null;
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="account-balance" size={20} color={GREEN} />
+          <Text style={styles.sectionTitle}>FCS</Text>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>FCS Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter FCS name"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsName}
+              onChangeText={(value) => updateFormData('fcsName', value)}
+            />
+            {errors.fcsName && <Text style={styles.errorText}>{errors.fcsName}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>FCS License Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter FCS license number"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsLicenseNumber}
+              onChangeText={(value) => updateFormData('fcsLicenseNumber', value)}
+            />
+            {errors.fcsLicenseNumber && <Text style={styles.errorText}>{errors.fcsLicenseNumber}</Text>}
+          </View>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter address"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsAddress}
+              onChangeText={(value) => updateFormData('fcsAddress', value)}
+            />
+            {errors.fcsAddress && <Text style={styles.errorText}>{errors.fcsAddress}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Phone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter phone"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsPhone}
+              onChangeText={(value) => updateFormData('fcsPhone', value)}
+            />
+            {errors.fcsPhone && <Text style={styles.errorText}>{errors.fcsPhone}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Email</Text>
                 <TextInput
-                  placeholder="Your full name"
-                  placeholderTextColor="#9CA3AF"
-                  value={name}
-                  onChangeText={t => {
-                    setName(t);
-                    if (errors.name) setErrors(p => ({ ...p, name: '' }));
-                  }}
                   style={styles.input}
-                  returnKeyType="next"
+              placeholder="Enter email"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsEmail}
+              onChangeText={(value) => updateFormData('fcsEmail', value)}
                 />
+            {errors.fcsEmail && <Text style={styles.errorText}>{errors.fcsEmail}</Text>}
+          </View>
+        </View>
               </View>
-              {!!errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+    );
+  };
 
-              {/* CNIC */}
-              <Text style={styles.inputLabel}>CNIC</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="badge" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+  const renderMiddlemanSection = () => {
+    if (formData.userType !== 'Middleman') return null;
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="business" size={20} color={GREEN} />
+          <Text style={styles.sectionTitle}>Middle Man</Text>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Company Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter company name"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.companyName}
+              onChangeText={(value) => updateFormData('companyName', value)}
+            />
+            {errors.companyName && <Text style={styles.errorText}>{errors.companyName}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>FCS License Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter FCS license number"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.fcsLicenseNumberMiddleman}
+              onChangeText={(value) => updateFormData('fcsLicenseNumberMiddleman', value)}
+            />
+            {errors.fcsLicenseNumberMiddleman && <Text style={styles.errorText}>{errors.fcsLicenseNumberMiddleman}</Text>}
+          </View>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter business address"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessAddress}
+              onChangeText={(value) => updateFormData('businessAddress', value)}
+            />
+            {errors.businessAddress && <Text style={styles.errorText}>{errors.businessAddress}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Phone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter business phone"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessPhone}
+              onChangeText={(value) => updateFormData('businessPhone', value)}
+            />
+            {errors.businessPhone && <Text style={styles.errorText}>{errors.businessPhone}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Email</Text>
                 <TextInput
-                  placeholder="12345-1234567-1"
-                  placeholderTextColor="#9CA3AF"
-                  value={cnic}
-                  onChangeText={t => {
-                    const v = maskCNIC(t);
-                    setCnic(v);
-                    if (errors.cnic) setErrors(p => ({ ...p, cnic: '' }));
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={15}
                   style={styles.input}
+              placeholder="Enter business email"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessEmail}
+              onChangeText={(value) => updateFormData('businessEmail', value)}
                 />
+            {errors.businessEmail && <Text style={styles.errorText}>{errors.businessEmail}</Text>}
+          </View>
+        </View>
               </View>
-              {!!errors.cnic && <Text style={styles.errorText}>{errors.cnic}</Text>}
+    );
+  };
 
-              {/* Role (custom pills — NO overflow) */}
-              <Text style={styles.inputLabel}>I am a</Text>
-              <RoleSelector value={job} onChange={setJob} />
+  const renderExporterSection = () => {
+    if (formData.userType !== 'Exporter') return null;
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="local-shipping" size={20} color={GREEN} />
+          <Text style={styles.sectionTitle}>Exporter</Text>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Company Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter company name"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.companyNameExporter}
+              onChangeText={(value) => updateFormData('companyNameExporter', value)}
+            />
+            {errors.companyNameExporter && <Text style={styles.errorText}>{errors.companyNameExporter}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Export License Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter export license number"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.exportLicenseNumber}
+              onChangeText={(value) => updateFormData('exportLicenseNumber', value)}
+            />
+            {errors.exportLicenseNumber && <Text style={styles.errorText}>{errors.exportLicenseNumber}</Text>}
+          </View>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter business address"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessAddressExporter}
+              onChangeText={(value) => updateFormData('businessAddressExporter', value)}
+            />
+            {errors.businessAddressExporter && <Text style={styles.errorText}>{errors.businessAddressExporter}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Phone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter business phone"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessPhoneExporter}
+              onChangeText={(value) => updateFormData('businessPhoneExporter', value)}
+            />
+            {errors.businessPhoneExporter && <Text style={styles.errorText}>{errors.businessPhoneExporter}</Text>}
+          </View>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Business Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter business email"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.businessEmailExporter}
+              onChangeText={(value) => updateFormData('businessEmailExporter', value)}
+            />
+            {errors.businessEmailExporter && <Text style={styles.errorText}>{errors.businessEmailExporter}</Text>}
+          </View>
+        </View>
+      </View>
+    );
+  };
 
-              {/* Phone */}
+  const renderMFDSection = () => {
+    if (formData.userType !== 'MFD') return null;
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialIcons name="admin-panel-settings" size={20} color={GREEN} />
+          <Text style={styles.sectionTitle}>MFD Staff</Text>
+        </View>
+        <View style={styles.inputRow}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>MFD Employee ID *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter MFD employee ID"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.mfdEmployeeId}
+              onChangeText={(value) => updateFormData('mfdEmployeeId', value)}
+            />
+            {errors.mfdEmployeeId && <Text style={styles.errorText}>{errors.mfdEmployeeId}</Text>}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPersonalInfoSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <MaterialIcons name="person" size={20} color={GREEN} />
+        <Text style={styles.sectionTitle}>Personal Information</Text>
+      </View>
+      <View style={styles.inputRow}>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>First Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter first name"
+            placeholderTextColor={PLACEHOLDER}
+            value={formData.firstName}
+            onChangeText={(value) => updateFormData('firstName', value)}
+          />
+          {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Last Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter last name"
+            placeholderTextColor={PLACEHOLDER}
+            value={formData.lastName}
+            onChangeText={(value) => updateFormData('lastName', value)}
+          />
+          {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+        </View>
+      </View>
+      <View style={styles.inputRow}>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Display Name *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter display name"
+            placeholderTextColor={PLACEHOLDER}
+            value={formData.displayName}
+            onChangeText={(value) => updateFormData('displayName', value)}
+          />
+          {errors.displayName && <Text style={styles.errorText}>{errors.displayName}</Text>}
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderContactSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <MaterialIcons name="mail" size={20} color={GREEN} />
+        <Text style={styles.sectionTitle}>Contact Information</Text>
+      </View>
+      <View style={styles.inputRow}>
+        <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Phone Number</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="call" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
                 <TextInput
-                  placeholder="03XX-XXXXXXX"
-                  placeholderTextColor="#9CA3AF"
-                  value={phoneNumber}
-                  onChangeText={t => {
-                    const v = maskPhonePK(t);
-                    setPhoneNumber(v);
-                    if (errors.phoneNumber) setErrors(p => ({ ...p, phoneNumber: '' }));
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={12}
                   style={styles.input}
+            placeholder="+92 XXX XXXXXXX"
+            placeholderTextColor={PLACEHOLDER}
+            value={formData.phoneNumber}
+            onChangeText={(value) => updateFormData('phoneNumber', value)}
                 />
               </View>
-              {!!errors.phoneNumber && <Text style={styles.errorText}>{errors.phoneNumber}</Text>}
-
-              {/* Email */}
-              <Text style={styles.inputLabel}>Email</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="mail-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Email Address *</Text>
                 <TextInput
-                  placeholder="you@example.com"
-                  placeholderTextColor="#9CA3AF"
-                  value={email}
-                  onChangeText={t => {
-                    setEmail(t);
-                    if (errors.email) setErrors(p => ({ ...p, email: '' }));
-                  }}
+            style={styles.input}
+            placeholder="Enter email address"
+            placeholderTextColor={PLACEHOLDER}
+            value={formData.email}
+            onChangeText={(value) => updateFormData('email', value)}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  style={styles.input}
                 />
+          {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        </View>
+      </View>
               </View>
-              {!!errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+  );
 
-              {/* Password */}
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="lock-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+  const renderSecuritySection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <MaterialIcons name="lock" size={20} color={GREEN} />
+        <Text style={styles.sectionTitle}>Security</Text>
+      </View>
+      <View style={styles.inputRow}>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Password *</Text>
+          <View style={styles.passwordContainer}>
                 <TextInput
-                  placeholder="••••••••"
-                  placeholderTextColor="#9CA3AF"
-                  value={password}
-                  onChangeText={t => {
-                    setPassword(t);
-                    if (errors.password) setErrors(p => ({ ...p, password: '' }));
-                  }}
-                  secureTextEntry={!showPass}
-                  style={styles.input}
-                  returnKeyType="next"
-                />
-                <TouchableOpacity style={styles.eye} onPress={() => setShowPass(s => !s)}>
-                  <MaterialIcons name={showPass ? 'visibility-off' : 'visibility'} size={20} color={TEXT_MUTED} />
+              style={styles.passwordInput}
+              placeholder="Create password"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.password}
+              onChangeText={(value) => updateFormData('password', value)}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <MaterialIcons 
+                name={showPassword ? 'visibility-off' : 'visibility'} 
+                size={20} 
+                color={TEXT_MUTED} 
+              />
                 </TouchableOpacity>
               </View>
-              {!!errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-
-              {/* Confirm Password */}
-              <Text style={styles.inputLabel}>Confirm Password</Text>
-              <View style={styles.inputWrap}>
-                <MaterialIcons name="lock-outline" size={18} color={TEXT_MUTED} style={styles.inputIcon} />
+          {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Confirm Password *</Text>
+          <View style={styles.passwordContainer}>
                 <TextInput
-                  placeholder="••••••••"
-                  placeholderTextColor="#9CA3AF"
-                  value={confirmPassword}
-                  onChangeText={t => {
-                    setConfirmPassword(t);
-                    if (errors.confirmPassword) setErrors(p => ({ ...p, confirmPassword: '' }));
-                  }}
-                  secureTextEntry={!showCPass}
-                  style={styles.input}
-                  returnKeyType="done"
-                />
-                <TouchableOpacity style={styles.eye} onPress={() => setShowCPass(s => !s)}>
-                  <MaterialIcons name={showCPass ? 'visibility-off' : 'visibility'} size={20} color={TEXT_MUTED} />
+              style={styles.passwordInput}
+              placeholder="Confirm password"
+              placeholderTextColor={PLACEHOLDER}
+              value={formData.confirmPassword}
+              onChangeText={(value) => updateFormData('confirmPassword', value)}
+              secureTextEntry={!showConfirmPassword}
+            />
+            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+              <MaterialIcons 
+                name={showConfirmPassword ? 'visibility-off' : 'visibility'} 
+                size={20} 
+                color={TEXT_MUTED} 
+              />
                 </TouchableOpacity>
-              </View>
-              {!!errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+          </View>
+          {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+        </View>
+      </View>
+    </View>
+  );
 
-              {/* CTAs */}
+    return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={styles.container}>
+        {/* Top Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.leftSection}>
+              <View style={styles.logo}>
+                <MaterialIcons name="waves" size={24} color={GREEN} />
+              </View>
+            </View>
+            <View style={styles.centerSection}>
+              <Text style={styles.portalTitle}>MFD Portal</Text>
+              <Text style={styles.portalSubtitle}>MARINE FISHERIES DEPARTMENT</Text>
+              <Text style={styles.portalDescription}>
+                Join the Professional Fisheries Management Community
+              </Text>
+            </View>
+            <View style={styles.rightSection}>
+              <View style={styles.poweredBy}>
+                <MaterialIcons name="flash-on" size={14} color="#fff" />
+                <Text style={styles.poweredByText}>Powered by: Government of Pakistan</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom Content */}
+        <View style={styles.content}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardView}
+          >
+            <ScrollView 
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.formHeader}>
+                <Text style={styles.title}>Create Professional Account</Text>
+                <Text style={styles.subtitle}>Join the Marine Fisheries Department portal</Text>
+              </View>
+
+              {renderUserTypeSection()}
+              {renderFishermanSection()}
+              {renderFCSSection()}
+              {renderMiddlemanSection()}
+              {renderExporterSection()}
+              {renderMFDSection()}
+              {renderPersonalInfoSection()}
+              {renderContactSection()}
+              {renderSecuritySection()}
+
+              <View style={styles.buttonContainer}>
               <TouchableOpacity
+                  style={[styles.createButton, loading && styles.createButtonDisabled]}
                 onPress={handleSignUp}
                 disabled={loading}
-                style={[styles.primaryBtn, loading && { opacity: 0.85 }]}
-                activeOpacity={0.9}
-              >
-                <MaterialIcons name="person-add-alt" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={styles.primaryBtnText}>{loading ? 'Creating…' : 'Create Account'}</Text>
+                >
+                  <MaterialIcons name="person-add" size={20} color="#fff" />
+                  <Text style={styles.createButtonText}>
+                    {loading ? 'Creating...' : 'Create Professional Account'}
+                  </Text>
               </TouchableOpacity>
+
+                <Text style={styles.loginPrompt}>Already have an account?</Text>
 
               <TouchableOpacity
-                onPress={() => {
-                  setName('');
-                  setEmail('');
-                  setPassword('');
-                  setConfirmPassword('');
-                  setCnic('');
-                  setPhoneNumber('');
-                  setErrors({});
-                  navigation.goBack();
-                }}
-                style={styles.secondaryBtn}
-                activeOpacity={0.9}
-              >
-                <MaterialIcons name="close" size={18} color={GREEN} style={{ marginRight: 8 }} />
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.microcopy}>
-                By creating an account, you agree to keep your information accurate and follow local regulations.
-              </Text>
-
-              {/* Already have account */}
-              <View style={styles.switchRow}>
-                <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Login' as any)}>
-                  <Text style={styles.link}>Sign In</Text>
+                  style={styles.signInButton}
+                  onPress={() => navigation.navigate('Login' as any)}
+                >
+                  <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                  <Text style={styles.signInButtonText}>Sign In</Text>
                 </TouchableOpacity>
-              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
+        </View>
       </View>
     </TouchableWithoutFeedback>
   );
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  scrollContainer: { paddingHorizontal: 16, paddingVertical: 18 },
-
-  /* Hero */
-  hero: {
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    backgroundColor: GREEN,
+    paddingTop: 50,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: GREEN,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    justifyContent: 'space-between',
+    minHeight: 80,
   },
-  emblem: { width: 84, height: 84, marginBottom: 6 },
-  title: { fontSize: 20, fontWeight: '800', color: SURFACE },
-  subtitle: { fontSize: 12, color: SURFACE, textAlign: 'center', marginTop: 4 },
-
-  /* Card */
-  card: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+  leftSection: {
+    width: 60,
+    alignItems: 'center',
   },
-
-  /* Photo */
-  photoWrap: { alignItems: 'center', marginBottom: 6 },
-  profileImage: {
-    height: 112,
-    width: 112,
-    borderRadius: 56,
-    borderWidth: 1,
-    borderColor: GREEN,
-  },
-  cameraBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    backgroundColor: GREEN,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  logo: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
-  },
-  imgText: { textAlign: 'center', fontWeight: '700', color: TEXT_MUTED, marginTop: 8, marginBottom: 8 },
-
-  /* Inputs */
-  inputLabel: { fontSize: 12, color: TEXT_MUTED, marginTop: 8, marginBottom: 6, marginLeft: 2 },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-  },
-  inputIcon: { marginRight: 6 },
-  input: { flex: 1, color: TEXT_DARK, paddingVertical: 10, fontSize: 14 },
-  eye: { padding: 6, marginLeft: 4 },
-   rolesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginBottom: 6,
-    // no gap for max RN support
-  },
-  rolePill: {
-    minWidth: 0,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: GREEN,
-    borderRadius: 12,
-    backgroundColor: '#F2FBF3',
-    flexDirection: 'row',
+  },
+  centerSection: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
-  /* 2 columns on narrow screens */
-  rolePill2Col: {
-    flexBasis: '48%',
-    maxWidth: '48%',
-    marginHorizontal: 4,
-    marginVertical: 4,
-  },
-  /* 3 columns on wider screens */
-  rolePill3Col: {
-    flexBasis: '31%',
-    maxWidth: '45%',
-    marginHorizontal: 4,
-    marginVertical: 4,
-  },
-  rolePillActive: { backgroundColor: GREEN },
-  rolePillText: {
-    color: GREEN,
-    fontWeight: '800',
-    fontSize: 13,
+  portalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
     textAlign: 'center',
   },
-  rolePillTextActive: { color: '#FFFFFF' },
-
-  /* Role: equal width pills (no overflow) */
-  
-  /* Errors */
-  errorText: { color: '#DC2626', fontSize: 12, marginTop: 6, marginLeft: 2 },
-
-  /* Buttons */
-  primaryBtn: {
-    backgroundColor: GREEN,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    marginTop: 12,
+  portalSubtitle: {
+    fontSize: 11,
+    color: '#fff',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    opacity: 0.9,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-
-  secondaryBtn: {
-    borderWidth: 1.5,
-    borderColor: GREEN,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    backgroundColor: '#F2FBF3',
-    marginTop: 10,
-  },
-  secondaryBtnText: { color: GREEN, fontWeight: '800', fontSize: 15 },
-
-  microcopy: { marginTop: 10, color: TEXT_MUTED, fontSize: 11, textAlign: 'center' },
-  switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 },
-  link: { color: GREEN, fontSize: 12, fontWeight: '800' },
-
-  /* Soft shapes */
-  bgDecorTop: {
-    position: 'absolute',
-    top: -90,
-    right: -70,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: '#E8F5E9',
+  portalDescription: {
+    fontSize: 12,
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 16,
     opacity: 0.8,
   },
-  bgDecorBottom: {
-    position: 'absolute',
-    bottom: -110,
-    left: -80,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: '#E0F2FE',
+  rightSection: {
+    width: 60,
+    alignItems: 'flex-end',
+  },
+  poweredBy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  poweredByText: {
+    fontSize: 9,
+    color: '#fff',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  formHeader: {
+    marginBottom: 24,
+    paddingTop: 16,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: GREEN,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TEXT_DARK,
+    marginLeft: 8,
+  },
+  userTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  userTypeCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userTypeCardActive: {
+    borderColor: GREEN,
+    backgroundColor: GREEN_LIGHT,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  radioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: GREEN,
+  },
+  userTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: TEXT_DARK,
+  },
+  userTypeTextActive: {
+    color: GREEN,
+    fontWeight: '600',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: TEXT_DARK,
+    backgroundColor: '#fff',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    fontSize: 14,
+    color: TEXT_DARK,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  buttonContainer: {
+    marginTop: 24,
+  },
+  createButton: {
+    backgroundColor: GREEN,
+    borderRadius: 8,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  createButtonDisabled: {
     opacity: 0.7,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  loginPrompt: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  signInButton: {
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signInButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 
