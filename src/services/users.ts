@@ -1,6 +1,9 @@
 // src/services/users.ts
-import { api } from './https';
+import { api, unwrap } from './https';
 import { stripUndefined } from '../utils/json';
+
+// Import BASE_URL to keep it consistent with the main API
+const BASE_URL = 'http://192.168.18.44:1000/api';
 
 /** Generic ID type */
 export type ID = number | string;
@@ -50,6 +53,7 @@ export type CreateUserBody = {
   name: string;
   email: string;
   password: string;
+  password_confirmation?: string;
   role?: UserRole;
   user_type?: UserType;
   phone?: string;
@@ -128,9 +132,6 @@ export type SearchUsersParams = {
   per_page?: number;
 };
 
-function unwrap<T>(json: any): T {
-  return (json?.data ?? json) as T;
-}
 
 /* =========================
  * Admin endpoints (kept)
@@ -146,8 +147,8 @@ export async function createUser(body: CreateUserBody) {
 
 // Special function for user registration that doesn't require authentication
 export async function registerUser(body: CreateUserBody) {
-  const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
-  const url = `${BASE_URL}/users`;
+  const url = `${BASE_URL}/register`;
+  
   
   const response = await fetch(url, {
     method: 'POST',
@@ -170,8 +171,29 @@ export async function registerUser(body: CreateUserBody) {
   }
 
   if (!response.ok) {
-    const msg = json?.message || (text ? text.slice(0, 200) : `HTTP ${response.status}`);
-    const err: any = new Error(msg);
+    let errorMessage = `HTTP ${response.status}`;
+    
+    if (json) {
+      if (json.message) {
+        errorMessage = json.message;
+      }
+      
+      // Handle validation errors specifically
+      if (json.errors) {
+        const validationErrors = Object.entries(json.errors)
+          .map(([field, messages]) => {
+            const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const errorList = Array.isArray(messages) ? messages.join(', ') : String(messages);
+            return `${fieldName}: ${errorList}`;
+          })
+          .join('\n');
+        errorMessage = `Validation errors:\n${validationErrors}`;
+      }
+    } else if (text) {
+      errorMessage = text.slice(0, 200);
+    }
+    
+    const err: any = new Error(errorMessage);
     err.status = response.status;
     err.response = json ?? text;
     throw err;

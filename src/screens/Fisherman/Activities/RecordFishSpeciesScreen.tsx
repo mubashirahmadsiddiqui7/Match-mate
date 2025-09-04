@@ -244,7 +244,7 @@ export default function RecordFishSpeciesScreen(): JSX.Element {
                 ]}
               >
                 <MaterialIcons
-                  name="fishing"
+                  name="sailing"
                   size={18}
                   color={type === 'catch' ? '#fff' : PRIMARY}
                 />
@@ -313,7 +313,7 @@ export default function RecordFishSpeciesScreen(): JSX.Element {
         {/* Submit Button */}
         <View style={styles.submitContainer}>
           {/* Debug Validation Status */}
-          <View style={{ 
+          {/* <View style={{ 
             backgroundColor: '#f3f4f6', 
             padding: 12, 
             borderRadius: 8, 
@@ -324,7 +324,7 @@ export default function RecordFishSpeciesScreen(): JSX.Element {
             <Text style={{ fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
               Debug: Species="{species}" | Type="{type}" | Qty="{qty}" | Valid={isValid ? 'true' : 'false'}
             </Text>
-          </View>
+          </View> */}
           
           <Pressable
             onPress={onSubmit}

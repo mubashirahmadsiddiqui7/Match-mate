@@ -4,6 +4,7 @@ export type AppRole =
   | 'middle_man'
   | 'exporter'
   | 'mfd_staff'
+  | 'fcs'
   | 'super_admin';
 
 export interface AuthUser {

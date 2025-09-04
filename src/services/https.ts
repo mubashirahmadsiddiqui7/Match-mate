@@ -1,8 +1,8 @@
 // src/services/http.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
-// const BASE_URL = 'http://192.168.18.44:8000/api';
+// const BASE_URL = 'https://smartaisoft.com/MFD-Trace-Fish/api';
+const BASE_URL = 'http://192.168.18.44:1000/api';
 // const BASE_URL = 'http://72.167.79.161/MFD-Trace-Fish/api';
 const DEBUG = __DEV__;
 
@@ -21,7 +21,7 @@ export async function setAuthToken(token: string | null) {
 
 type ReqOpts = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  body?: any;  
+  body?: any;
   headers?: Record<string, string>;
   signal?: AbortSignal;
   isUpload?: boolean;
@@ -124,4 +124,9 @@ export async function api(path: string, opts: ReqOpts = {}) {
 
 export async function upload(path: string, form: FormData) {
   return api(path, { method: 'POST', isUpload: true, body: form });
+}
+
+// Helper function to unwrap API responses
+export function unwrap<T>(json: any): T {
+  return (json?.data ?? json) as T;
 }

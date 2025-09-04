@@ -11,6 +11,7 @@ function mapRole(serverUserType?: string | null): AppRole | null {
   if (r.includes('middle') || r.includes('auction')) return 'middle_man';
   if (r.includes('export')) return 'exporter';
   if (r.includes('mfd') || r.includes('staff')) return 'mfd_staff';
+  if (r.includes('fcs')) return 'fcs';
   if (r.includes('super')) return 'mfd_staff';
   return null;
 }

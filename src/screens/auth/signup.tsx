@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../../../types';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { registerUser, type CreateUserBody } from '../../services/users';
+import Toast from 'react-native-toast-message';
 
 /* ===== Theme ===== */
 const GREEN = '#1f720d';
@@ -177,6 +178,19 @@ const SignUp = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Map form user types to API user types
+  const mapUserTypeToAPI = (userType: UserType | null): string | undefined => {
+    const mapping: Record<UserType, string> = {
+      'Fisherman': 'fishermen',  // Backend expects 'fishermen' (plural)
+      'FCS': 'fcs',
+      'Middleman': 'middle_man',
+      'Exporter': 'exporter',
+      'MFD': 'mfd_staff',
+    };
+    return userType ? mapping[userType] : undefined;
+  };
+
+
   const handleSignUp = async () => {
     if (!validateForm()) return;
     
@@ -187,7 +201,8 @@ const SignUp = () => {
         name: formData.displayName,
         email: formData.email,
         password: formData.password,
-        user_type: formData.userType?.toLowerCase(),
+        password_confirmation: formData.confirmPassword,
+        user_type: mapUserTypeToAPI(formData.userType),
         phone: formData.phoneNumber,
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -231,26 +246,30 @@ const SignUp = () => {
         userData.mfd_employee_id = formData.mfdEmployeeId;
       }
 
+      // Debug: Log the user data being sent
+      console.log('Sending user data:', JSON.stringify(userData, null, 2));
+      
       // Call the API
       await registerUser(userData);
       
-      Alert.alert(
-        'Success', 
-        `Account created successfully for ${formData.displayName} (${formData.userType})`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Login' as any)
-          }
-        ]
-      );
+      Toast.show({
+        type: 'success',
+        text1: 'Account Created Successfully!',
+        text2: `Your account has been created. Please wait for admin approval before you can login.`,
+        visibilityTime: 4000,
+        autoHide: true,
+        onHide: () => navigation.navigate('Login' as any)
+      });
       
     } catch (error: any) {
       console.error('Signup error:', error);
-      Alert.alert(
-        'Error', 
-        error?.message || 'Failed to create account. Please try again.'
-      );
+      Toast.show({
+        type: 'error',
+        text1: 'Account Creation Failed',
+        text2: error?.message || 'Failed to create account. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true
+      });
     } finally {
       setLoading(false);
     }
@@ -716,8 +735,9 @@ const SignUp = () => {
   );
 
     return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
+    <View style={styles.container}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -793,8 +813,10 @@ const SignUp = () => {
           </ScrollView>
         </KeyboardAvoidingView>
         </View>
-      </View>
-    </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+      <Toast />
+    </View>
   );
 };
 

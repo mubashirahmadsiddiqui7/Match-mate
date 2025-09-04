@@ -8,6 +8,7 @@ import FishermanStack from './stacks/FishermanStack';
 import MiddleManStack from './stacks/MiddleManStack';
 import ExporterStack from './stacks/ExporterStack';
 import MFDStaffStack from './stacks/MFDStaffStack';
+import FCSStack from './stacks/FCSStack';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import NotSupportedScreen from '../../screens/common/NotSupportedScreen';
 import { RootState } from '../../redux/store';
@@ -36,11 +37,13 @@ export default function RootNavigator() {
       {role === 'middle_man' && <MiddleManStack />}
       {role === 'exporter' && <ExporterStack />}
       {role === 'mfd_staff' && <MFDStaffStack />}
+      {role === 'fcs' && <FCSStack />}
       {!(
         role === 'fisherman' ||
         role === 'middle_man' ||
         role === 'exporter' ||
-        role === 'mfd_staff'
+        role === 'mfd_staff' ||
+        role === 'fcs'
       ) && (
         <Stack.Navigator>
           <Stack.Screen
