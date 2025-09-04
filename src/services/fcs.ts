@@ -336,17 +336,17 @@ export async function fetchFCSDistributions(params: {
 }
 
 export async function fetchFCSDistributionById(id: number | string): Promise<FishLotDistribution> {
-  const json = await api(`/fish-lot-distributions/${id}`, { method: 'GET' });
+  const json = await api(`/middle-man-distributions/${id}`, { method: 'GET' });
   return json?.data ?? json;
 }
 
 export async function verifyFCSDistribution(id: number | string): Promise<FishLotDistribution> {
-  const json = await api(`/fish-lot-distributions/${id}/verify`, { method: 'POST' });
+  const json = await api(`/middle-man-distributions/${id}/verify`, { method: 'POST' });
   return json?.data ?? json;
 }
 
 export async function rejectFCSDistribution(id: number | string, payload: { verification_notes: string }): Promise<FishLotDistribution> {
-  const json = await api(`/fish-lot-distributions/${id}/reject`, {
+  const json = await api(`/middle-man-distributions/${id}/reject`, {
     method: 'POST',
     body: payload,
   });
