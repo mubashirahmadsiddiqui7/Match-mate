@@ -396,13 +396,19 @@ export default function TripDetailsScreen() {
             style={[
               styles.halfBtn,
               { backgroundColor: PRIMARY },
-              actionLoading && { opacity: 0.6 },
+              (actionLoading || completeMetaLoading) && { opacity: 0.6 },
             ]}
             onPress={openComplete}
-            disabled={actionLoading}
+            disabled={actionLoading || completeMetaLoading}
           >
-            <MaterialIcons name="check-circle" size={18} color="#fff" />
-            <Text style={styles.halfBtnText}>Complete</Text>
+            {completeMetaLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <MaterialIcons name="check-circle" size={18} color="#fff" />
+                <Text style={styles.halfBtnText}>Complete</Text>
+              </>
+            )}
           </Pressable>
         </View>
       );

@@ -12,9 +12,11 @@ import {
   Platform,
   useWindowDimensions,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Dropdown } from 'react-native-element-dropdown';
+import Toast from 'react-native-toast-message';
 
 /* ---- design tokens ---- */
 const PRIMARY = '#1f720d';
@@ -276,6 +278,48 @@ export function CompleteTripModal({
 
   const overAssign = totalAvailableKg > 0 && assignedKg > totalAvailableKg;
 
+  // Per-lot availability and assignment tracking
+  const lotAvailabilityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (availableLots || []).forEach(l => {
+      const v = typeof l.quantity_kg === 'string' ? parseFloat(l.quantity_kg) : Number(l.quantity_kg);
+      map.set(l.lot_no, Number.isFinite(v) ? v : 0);
+    });
+    return map;
+  }, [availableLots]);
+
+  const lotAssignedMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (form.rows || []).forEach(r => {
+      const lot = r.lot_no?.trim();
+      if (!lot) return;
+      const n = Number(r.quantity_kg);
+      const prev = map.get(lot) ?? 0;
+      map.set(lot, prev + (Number.isFinite(n) ? n : 0));
+    });
+    return map;
+  }, [form.rows]);
+
+  function nearlyEqual(a: number, b: number, eps = 0.01) {
+    return Math.abs(a - b) <= eps;
+  }
+
+  const anyLotOverAssigned = useMemo(() => {
+    for (const [lot, assigned] of lotAssignedMap) {
+      const avail = lotAvailabilityMap.get(lot) ?? 0;
+      if (assigned - avail > 0.0001) return true;
+    }
+    return false;
+  }, [lotAssignedMap, lotAvailabilityMap]);
+
+  const allLotsFullyDistributed = useMemo(() => {
+    for (const [lot, avail] of lotAvailabilityMap) {
+      const assigned = lotAssignedMap.get(lot) ?? 0;
+      if (!nearlyEqual(assigned, avail)) return false;
+    }
+    return (availableLots || []).length > 0;
+  }, [lotAvailabilityMap, lotAssignedMap, availableLots]);
+
   const validRows = useMemo(
     () =>
       form.rows.filter(
@@ -293,10 +337,32 @@ export function CompleteTripModal({
     form.landing_site.trim().length > 0 &&
     validRows.length > 0 &&
     !loading &&
-    !overAssign;
+    !overAssign &&
+    !anyLotOverAssigned &&
+    allLotsFullyDistributed;
 
   function handleSubmit() {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      // Build helpful error
+      const unmetLots: string[] = [];
+      for (const [lot, avail] of lotAvailabilityMap) {
+        const assigned = lotAssignedMap.get(lot) ?? 0;
+        if (!nearlyEqual(assigned, avail)) {
+          const remaining = Math.max(avail - assigned, 0);
+          unmetLots.push(`${lot} (${remaining.toFixed(2)} kg remaining)`);
+        }
+      }
+      let text2 = 'Please fix the highlighted issues and try again.';
+      if (anyLotOverAssigned) {
+        text2 = 'Assigned quantity exceeds available for one or more lots.';
+      } else if (unmetLots.length) {
+        text2 = `Distribute all lots fully. Pending: ${unmetLots.join(', ')}`;
+      } else if (overAssign) {
+        text2 = 'Total assigned kg exceeds total available.';
+      }
+      Toast.show({ type: 'error', text1: 'Cannot complete trip', text2, position: 'top' });
+      return;
+    }
 
     const payload: CompleteTripPayload = {
       landing_site: form.landing_site.trim(), // label text as requested
@@ -357,15 +423,15 @@ export function CompleteTripModal({
             ]}
           >
             <MaterialIcons
-              name={overAssign ? 'warning-amber' : 'info'}
+              name={overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? 'warning-amber' : 'info'}
               size={16}
-              color={overAssign ? DANGER : INFO}
+              color={overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? DANGER : INFO}
             />
             <Text
               style={[
                 styles.summaryText,
                 styles.textWrap,
-                { color: overAssign ? DANGER : INFO },
+                { color: overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? DANGER : INFO },
               ]}
             >
               Assigned:{' '}
@@ -373,7 +439,13 @@ export function CompleteTripModal({
               {totalAvailableKg > 0
                 ? `  •  Available: ${totalAvailableKg.toFixed(2)} KG`
                 : ''}
-              {overAssign ? '  — Reduce assigned KG to proceed' : ''}
+              {overAssign
+                ? '  — Reduce total assigned KG to proceed'
+                : anyLotOverAssigned
+                ? '  — A lot exceeds its available KG'
+                : !allLotsFullyDistributed
+                ? '  — Distribute all lots fully to proceed'
+                : ''}
             </Text>
           </View>
 
@@ -579,14 +651,18 @@ export function CompleteTripModal({
 
             {/* Complete Button */}
             <TouchableOpacity
-              style={[styles.button, styles.completeBtn]}
+              style={[styles.button, styles.completeBtn, (loading || !canSubmit) && { opacity: 0.7 }]}
               onPress={handleSubmit}
               disabled={!canSubmit || loading}
             >
-              <MaterialIcons name="check-circle" size={20} color="#059669" />
-              <Text style={[styles.btnText, { color: '#059669' }]}>
-                Complete Trip
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="#059669" />
+              ) : (
+                <>
+                  <MaterialIcons name="check-circle" size={20} color="#059669" />
+                  <Text style={[styles.btnText, { color: '#059669' }]}>Complete Trip</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
