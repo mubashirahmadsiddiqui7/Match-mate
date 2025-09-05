@@ -8,12 +8,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  SafeAreaView,
+  StatusBar,
+  Pressable,
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MiddleManStackParamList } from '../../app/navigation/stacks/MiddleManStack';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import PALETTE from '../../theme/palette';
 import {
   fetchDistributions,
   type FishLotDistribution,
@@ -24,7 +27,7 @@ import {
 } from '../../services/middlemanDistribution';
 
 
-type Nav = NativeStackNavigationProp<MiddleManStackParamList, 'MiddleManHome'>;
+type Nav = NativeStackNavigationProp<MiddleManStackParamList>;
 
 const Status = [
   { label: 'All Status', value: 'All Status' },
@@ -164,7 +167,7 @@ export default function Distributions() {
     return (
       <TouchableOpacity 
         style={styles.distributionCard}
-        onPress={() => navigation.navigate('distributionDetails' as any, { distributionId: item.id })}
+        onPress={() => navigation.navigate('distributionDetails', { distributionId: item.id })}
         activeOpacity={0.8}
       >
         <View style={styles.cardHeader}>
@@ -229,9 +232,9 @@ export default function Distributions() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.viewButton}>
-          <Text style={styles.viewButtonText}>👁️ View</Text>
-        </TouchableOpacity>
+        {/* <TouchableOpacity style={styles.viewButton}>
+          <Text style={styles.viewButtonText}>View Details</Text>
+        </TouchableOpacity> */}
       </TouchableOpacity>
     );
   };
@@ -294,7 +297,7 @@ export default function Distributions() {
             style={styles.applyButton}
             onPress={() => applyFilters()}
           >
-            <Text style={styles.applyButtonText}>🔍 Apply Filters</Text>
+            <Text style={styles.applyButtonText}>Apply Filters</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.clearButton}
@@ -317,17 +320,39 @@ export default function Distributions() {
   // --- Loader ---
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.8 }]}>
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Distributions</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
         <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#07890bff" />
+          <ActivityIndicator size="large" color={PALETTE.green700} />
           <Text style={styles.loaderText}>Loading distributions...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.8 }]}>
+          <Icon name="arrow-back" size={24} color="#fff" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Distributions</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <FlatList
         data={allDistributions}
         keyExtractor={item => item.id.toString()}
@@ -343,7 +368,7 @@ export default function Distributions() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={EmptyState}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -362,6 +387,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  header: {
+    backgroundColor: PALETTE.green700,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+  },
+  headerSpacer: {
+    width: 40,
   },
   loaderContainer: {
     flex: 1,
@@ -485,18 +531,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   applyButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 14,
+    backgroundColor: PALETTE.green700,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 8,
     flex: 1,
     marginRight: 8,
     alignItems: 'center',
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: PALETTE.green700,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   applyButtonText: {
     color: '#fff',
@@ -526,13 +572,13 @@ const styles = StyleSheet.create({
   // Distribution Card
   distributionCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
     borderWidth: 1,
     borderColor: '#f3f4f6',
   },
@@ -540,7 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   cardTitle: {
     fontSize: 20,
@@ -565,17 +611,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   cardContent: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   infoSection: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingVertical: 4,
+    marginBottom: 8,
+    paddingVertical: 2,
   },
   infoLabel: {
     fontSize: 15,
@@ -633,15 +679,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   viewButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: PALETTE.green700,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: PALETTE.green700,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   viewButtonText: {
     color: '#fff',

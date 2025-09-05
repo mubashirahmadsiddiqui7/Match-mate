@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MiddleManHome from '../../../screens/middleman/MiddleManHome';
 import LotDetails from '../../../screens/middleman/lotDetails';
 import Distributions from '../../../screens/middleman/Distributions';
-import distributionDetails from '../../../screens/middleman/distributionDetails';
+import DistributionDetails from '../../../screens/middleman/distributionDetails';
 import Assignments from '../../../screens/middleman/Assignments';
 import AssignmentDetails from '../../../screens/middleman/AssignmentDetails';
 import Purchases from '../../../screens/middleman/Purchases';
@@ -34,15 +34,15 @@ export default function MiddleManStack() {
         component={LotDetails}
         options={{ headerShown: true, title: 'Lot Details' }}
       />
-      <Stack.Screen
+            <Stack.Screen 
         name="Distributions"
         component={Distributions}
-        options={{ headerShown: true, title: 'Distributions' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="distributionDetails"
-        component={distributionDetails}
-        options={{headerShown:true, title: 'Distribution Details'}}
+        component={DistributionDetails}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="Assignments"
