@@ -15,7 +15,8 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
+// Use core RN ScrollView to avoid requiring RNGestureHandler on Android/iOS
+import { ScrollView } from 'react-native';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';

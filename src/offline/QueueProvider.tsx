@@ -49,5 +49,15 @@ export default function QueueProvider({ children }: Props) {
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <>
+      {React.Children.map(children, child => {
+        if (typeof child === 'string' || typeof child === 'number') {
+          // React Native cannot render raw text at the root – ignore any stray text nodes
+          return null;
+        }
+        return child as React.ReactElement | null;
+      })}
+    </>
+  );
 }

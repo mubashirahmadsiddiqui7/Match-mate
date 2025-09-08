@@ -334,24 +334,24 @@ export default function TripDetailsScreen() {
   function ActionsBar() {
     if (!trip) return null;
 
-    if (isApproved) {
-      return (
-        <Pressable
-          style={[styles.bigBtn, actionLoading && { opacity: 0.5 }]}
-          onPress={handleStart}
-          disabled={actionLoading}
-        >
-          {actionLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <MaterialIcons name="play-circle-filled" size={22} color="#fff" />
-              <Text style={styles.bigBtnText}>Start Trip</Text>
-            </>
-          )}
-        </Pressable>
-      );
-    }
+    // if (isApproved) {
+    //   return (
+    //     <Pressable
+    //       style={[styles.bigBtn, actionLoading && { opacity: 0.5 }]}
+    //       onPress={handleStart}
+    //       disabled={actionLoading}
+    //     >
+    //       {actionLoading ? (
+    //         <ActivityIndicator color="#fff" />
+    //       ) : (
+    //         <>
+    //           <MaterialIcons name="play-circle-filled" size={22} color="#fff" />
+    //           <Text style={styles.bigBtnText}>Start Trip</Text>
+    //         </>
+    //       )}
+    //     </Pressable>
+    //   );
+    // }
 
     if (isActive) {
       return (
