@@ -34,6 +34,8 @@ import {
 import { isOnline } from '../../../offline/net';
 import { enqueueCreateActivity } from '../../../offline/TripQueues';
 import { buildActivityId } from '../../../utils/ids';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../../redux/store';
 
 type Nav = NativeStackNavigationProp<
   FishermanStackParamList,
@@ -71,6 +73,9 @@ function formatTimeForDisplay(date: Date | null): string {
 export default function FishingActivity() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const auth = useSelector((s: RootState) => (s as any).auth);
+  const authUser = auth?.user;
+  const profile = React.useMemo(() => authUser?.profile ?? authUser ?? {}, [authUser]);
 
   const {
     mode = 'create',
@@ -269,11 +274,24 @@ export default function FishingActivity() {
         });
 
                  // Navigate to details with local ID
+         // derive simple date/time for offline details view
+         const today = new Date();
+         const yyyy = today.getFullYear();
+         const mm = String(today.getMonth() + 1).padStart(2, '0');
+         const dd = String(today.getDate()).padStart(2, '0');
+         const activity_date = `${yyyy}-${mm}-${dd}`; // yyyy-mm-dd
+         const activity_time = body.time_of_netting ?? body.time_of_hauling ?? null; // HH:mm
+         const fisherId = profile?.fisherman_id ?? profile?.id ?? null;
+
          navigation.replace('FishingActivityDetails', {
            activityId: job.localId,
            fallback: {
              id: job.localId,
              activity_id: activityCode,
+             fisherman_id: fisherId,
+             trip_fisherman_id: fisherId,
+             activity_date,
+             activity_time,
              ...body,
              status: 'pending_upload'
            },

@@ -165,7 +165,7 @@ export default function FishingActivityDetailsScreen() {
         {(data?.trip_pk ?? tripId) && (
           <Pressable
             onPress={() =>
-              // pass numeric PK back to TripDetails
+              // pass numeric PK gitDetails
               // @ts-ignore
               navigation.navigate('TripDetails', {
                 id: data?.trip_pk ?? tripId,
