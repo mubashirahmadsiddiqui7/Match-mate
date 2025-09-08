@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import NetInfo from '@react-native-community/netinfo';
 import { useDispatch, useSelector } from 'react-redux';
@@ -97,8 +98,17 @@ export default function FishermanHome() {
   }, [dispatch]);
 
   const goAllTrips = useCallback(() => {
+    if (!online) {
+      Toast.show({
+        type: 'info',
+        text1: "You're offline",
+        text2: 'View Offline Trips instead.',
+      });
+      navigation.navigate('OfflineTrips');
+      return;
+    }
     navigation.navigate('AllTrip');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const goNewTrip = useCallback(() => {
     navigation.navigate('Trip');
@@ -109,24 +119,44 @@ export default function FishermanHome() {
   }, [navigation]);
 
   const goFishingActivities = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Activities require internet.' });
+      return;
+    }
     navigation.navigate('FishingActivities');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const goBoatsList = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Boats require internet.' });
+      return;
+    }
     navigation.navigate('BoatsList');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const goBoatRegister = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Registering boats requires internet.' });
+      return;
+    }
     navigation.navigate('BoatRegister');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const goLotsList = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Species list requires internet.' });
+      return;
+    }
     navigation.navigate('LotsList');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const goProfile = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Editing profile requires internet.' });
+      return;
+    }
     navigation.navigate('Profile');
-  }, [navigation]);
+  }, [navigation, online]);
 
   const activeTrips = useMemo(() => {
     return counts?.active || 0;

@@ -9,10 +9,11 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
-  Alert,
   StatusBar,
   Platform,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
+import NetInfo from '@react-native-community/netinfo';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { listTripsPage, startTrip } from '../../../services/trips';
@@ -50,6 +51,7 @@ export default function TripsScreen() {
   const [loading, setLoading] = useState(false);
   const [trips, setTrips] = useState<TripRow[]>([]);
   const [actionBusyId, setActionBusyId] = useState<string | number | null>(null);
+  const [online, setOnline] = useState<boolean>(true);
   const navigation = useNavigation();
   const handleBack = () => {
     // go back if possible, else fall back to FishermanHome
@@ -58,7 +60,13 @@ export default function TripsScreen() {
     navigation.navigate('FishermanHome');
   };
 
-  // load dummy data (swap with API later)
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(s => setOnline(!!s.isConnected));
+    NetInfo.fetch().then(s => setOnline(!!s.isConnected)).catch(() => {});
+    return () => { unsub && unsub(); };
+  }, []);
+
+  // load data
   const loadTrips = useCallback(async () => {
     setLoading(true);
     try {
@@ -66,13 +74,18 @@ export default function TripsScreen() {
       const res = await listTripsPage({ page: 1, per_page: 100 });
       setTrips(res.rows as any); // rows already match TripRow shape
     } catch (e: any) {
-      console.log('[TripsScreen] load failed:', e?.message || e);
-      Alert.alert('Error', e?.message || 'Failed to load trips');
+      const msg = e?.message || 'Failed to load trips';
+      console.log('[TripsScreen] load failed:', msg);
+      Toast.show({
+        type: 'error',
+        text1: online ? 'Error' : "You're offline",
+        text2: online ? msg : 'You cannot view All Trips while offline. Open Offline Trips.',
+      });
       setTrips([]); // or keep prior
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [online]);
 
   useEffect(() => {
     loadTrips();
@@ -208,11 +221,15 @@ export default function TripsScreen() {
               onPress={async () => {
                 try {
                   setActionBusyId(item.id);
+                  if (!online) {
+                    Toast.show({ type: 'info', text1: "You're offline", text2: 'Start trip requires internet.' });
+                    return;
+                  }
                   await startTrip(item.id);
-                  Alert.alert('Trip Started', 'Status updated to Active.');
+                  Toast.show({ type: 'success', text1: 'Trip Started', text2: 'Status updated to Active.' });
                   await loadTrips();
                 } catch (e: any) {
-                  Alert.alert('Failed', e?.message || 'Could not start trip');
+                  Toast.show({ type: 'error', text1: 'Failed', text2: e?.message || 'Could not start trip' });
                 } finally {
                   setActionBusyId(null);
                 }

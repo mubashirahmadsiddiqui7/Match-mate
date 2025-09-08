@@ -78,16 +78,29 @@ export async function api(path: string, opts: ReqOpts = {}) {
     console.groupEnd();
   }
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: opts.isUpload
-      ? (opts.body as any)
-      : opts.body
-      ? JSON.stringify(opts.body)
-      : undefined,
-    signal: opts.signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: opts.isUpload
+        ? (opts.body as any)
+        : opts.body
+        ? JSON.stringify(opts.body)
+        : undefined,
+      signal: opts.signal,
+    });
+  } catch (e: any) {
+    const msg = (e?.message || '').toLowerCase();
+    const offline = msg.includes('network request failed') || msg.includes('failed to fetch');
+    const err: any = new Error(
+      offline
+        ? 'No internet connection. Some features are unavailable offline.'
+        : e?.message || 'Request failed.'
+    );
+    if (offline) err.code = 'OFFLINE';
+    throw err;
+  }
 
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
   const text = await res.text();
