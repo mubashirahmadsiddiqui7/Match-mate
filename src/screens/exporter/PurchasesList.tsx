@@ -1,10 +1,10 @@
 /* eslint-disable react-native/no-inline-styles */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator, StatusBar, Platform, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndicator, StatusBar, Platform, TextInput, ScrollView, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import PALETTE from '../../theme/palette';
-import { fetchPurchases, type FishPurchase, getStatusColor, getStatusText, formatDate } from '../../services/middlemanDistribution';
+import { fetchExporterPurchases, processExporterPurchase, completeExporterPurchase, type ExporterPurchase, getStatusColor, getStatusText, formatDate } from '../../services/exporter';
 
 export default function PurchasesList() {
   const navigation = useNavigation();
@@ -14,14 +14,15 @@ export default function PurchasesList() {
     navigation.navigate('ExporterHome');
   };
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<FishPurchase[]>([]);
+  const [items, setItems] = useState<ExporterPurchase[]>([]);
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [status, setStatus] = useState<'all' | 'pending' | 'confirmed' | 'processed' | 'completed' | 'cancelled'>('all');
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchPurchases({ page: 1, per_page: 50, status: status === 'all' ? undefined : status, search: query || undefined });
+      const res = await fetchExporterPurchases({ page: 1, per_page: 50, status: status === 'all' ? undefined : status, search: query || undefined });
       setItems(res.items);
     } catch (e) {
       setItems([]);
@@ -32,17 +33,80 @@ export default function PurchasesList() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleProcess = async (item: ExporterPurchase) => {
+    const proceed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Mark as Processed',
+        'Are you sure you want to mark this purchase as processed?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Process', style: 'default', onPress: () => resolve(true) },
+        ],
+        { cancelable: true },
+      );
+    });
+
+    if (!proceed) return;
+
+    try {
+      setActionLoading(item.id);
+      await processExporterPurchase(item.id);
+      Alert.alert('Success', 'Purchase marked as processed successfully.');
+      load();
+    } catch (error) {
+      console.error('Error processing purchase:', error);
+      Alert.alert('Error', 'Failed to process purchase. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleComplete = async (item: ExporterPurchase) => {
+    const proceed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Mark as Complete',
+        'Are you sure you want to mark this purchase as complete?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Complete', style: 'default', onPress: () => resolve(true) },
+        ],
+        { cancelable: true },
+      );
+    });
+
+    if (!proceed) return;
+
+    try {
+      setActionLoading(item.id);
+      await completeExporterPurchase(item.id);
+      Alert.alert('Success', 'Purchase marked as complete successfully.');
+      load();
+    } catch (error) {
+      console.error('Error completing purchase:', error);
+      Alert.alert('Error', 'Failed to complete purchase. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleViewDetails = (item: ExporterPurchase) => {
+    // @ts-ignore
+    navigation.navigate('PurchaseDetails', { purchaseId: item.id.toString() });
+  };
+
   const total = useMemo(() => items.length, [items]);
   const counts = useMemo(() => {
-    const c = { all: items.length, pending: 0, confirmed: 0, completed: 0, cancelled: 0 } as Record<string, number>;
+    const c = { all: items.length, pending: 0, confirmed: 0, processed: 0, completed: 0, cancelled: 0 } as Record<string, number>;
     items.forEach(p => { c[p.status] = (c[p.status] || 0) + 1; });
     return c;
   }, [items]);
 
-  const renderItem = ({ item }: { item: any }) => {
+  const renderItem = ({ item }: { item: ExporterPurchase }) => {
     const color = getStatusColor(item.status);
+    const isLoading = actionLoading === item.id;
+    
     return (
-      <View style={styles.card}>
+      <Pressable onPress={() => handleViewDetails(item)} style={({ pressed }) => [styles.card, pressed && { opacity: 0.95 }]}>
         {/* Header */}
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
@@ -79,7 +143,75 @@ export default function PurchasesList() {
             </View>
           ))}
         </ScrollView>
-      </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          {item.status === 'confirmed' && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleProcess(item);
+              }}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.processButton,
+                pressed && { opacity: 0.9 },
+                isLoading && { opacity: 0.6 }
+              ]}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="build" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Mark as Processed</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+
+          {item.status === 'processed' && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleComplete(item);
+              }}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.completeButton,
+                pressed && { opacity: 0.9 },
+                isLoading && { opacity: 0.6 }
+              ]}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="check-circle" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Mark as Complete</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              handleViewDetails(item);
+            }}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.viewButton,
+              pressed && { opacity: 0.9 }
+            ]}
+          >
+            <Icon name="visibility" size={16} color={PALETTE.green700} />
+            <Text style={[styles.actionButtonText, { color: PALETTE.green700 }]}>View Details</Text>
+          </Pressable>
+        </View>
+      </Pressable>
     );
   };
 
@@ -134,7 +266,7 @@ export default function PurchasesList() {
             style={styles.searchInput}
           />
           <View style={styles.filterChips}>
-            {(['all','pending','confirmed','completed','cancelled'] as const).map(st => (
+            {(['all','pending','confirmed','processed','completed','cancelled'] as const).map(st => (
               <Pressable key={st} onPress={() => { setStatus(st); load(); }} style={({ pressed }) => [styles.chip, status === st && styles.chipActive, pressed && { opacity: 0.95 }]}>
                 <Text style={[styles.chipText, status === st && styles.chipTextActive]}>{st[0].toUpperCase() + st.slice(1)}{st==='all' ? ` (${counts.all})` : ''}</Text>
               </Pressable>
@@ -197,6 +329,37 @@ const styles = StyleSheet.create({
   chipTextActive: { color: PALETTE.green700 },
   filterBtn: { marginTop: 10, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#155E3C', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
   filterBtnText: { color: '#fff', fontWeight: '800' },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  processButton: {
+    backgroundColor: '#9c27b0',
+    borderColor: '#9c27b0',
+  },
+  completeButton: {
+    backgroundColor: '#4caf50',
+    borderColor: '#4caf50',
+  },
+  viewButton: {
+    backgroundColor: '#f8f9fa',
+    borderColor: PALETTE.green600,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
 });
 
 function shadow(opacity: number, radius: number, height: number) {

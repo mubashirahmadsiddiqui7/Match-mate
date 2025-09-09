@@ -22,6 +22,7 @@ import {
   getStatusColor,
   getStatusText,
   formatDate,
+  confirmPurchase,
 } from '../../services/middlemanDistribution';
 
 // --- Types ---
@@ -85,6 +86,32 @@ export default function Purchases() {
       <PurchaseCard
         purchase={item}
         onPress={() => navigation.navigate('purchaseDetails', { purchaseId: item.id })}
+        onConfirm={async () => {
+          try {
+            const proceed = await new Promise<boolean>((resolve) => {
+              Alert.alert(
+                'Confirm Purchase',
+                'Are you sure you want to confirm this purchase?',
+                [
+                  { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                  { text: 'Confirm', style: 'default', onPress: () => resolve(true) },
+                ],
+                { cancelable: true },
+              );
+            });
+            if (!proceed) return;
+
+            setLoading(true);
+            await confirmPurchase(item.id);
+            Alert.alert('Success', 'Purchase confirmed successfully.');
+            loadPurchases(1, true);
+          } catch (e) {
+            console.error('Confirm purchase error:', e);
+            Alert.alert('Error', 'Failed to confirm purchase. Please try again.');
+          } finally {
+            setLoading(false);
+          }
+        }}
         statusColor={statusColor}
         statusText={statusText}
       />
@@ -155,11 +182,13 @@ export default function Purchases() {
 const PurchaseCard = ({
   purchase,
   onPress,
+  onConfirm,
   statusColor,
   statusText
 }: {
   purchase: MiddlemanPurchase;
   onPress: () => void;
+  onConfirm: () => void;
   statusColor: string;
   statusText: string;
 }) => (
@@ -233,19 +262,47 @@ const PurchaseCard = ({
       </Text>
     </View>
 
-    {/* Action Button */}
+    {/* Action Buttons */}
     <View style={styles.cardFooter}>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.viewButton,
-          pressed && { opacity: 0.8 }
-        ]}
-        accessibilityLabel="View Details"
-      >
-        <Icon name="arrow-forward-ios" size={16} color={PALETTE.green700} />
-        <Text style={styles.viewButtonText}>View Details</Text>
-      </Pressable>
+      {purchase.status === 'pending' ? (
+        <>
+          <Pressable
+            onPress={onPress}
+            style={({ pressed }) => [
+              styles.viewButton,
+              pressed && { opacity: 0.8 }
+            ]}
+            accessibilityLabel="View Details"
+          >
+            <Icon name="visibility" size={18} color={PALETTE.green700} />
+            <Text style={styles.viewButtonText}>View</Text>
+          </Pressable>
+          <View style={{ width: 10 }} />
+          <Pressable
+            onPress={onConfirm}
+            style={({ pressed }) => [
+              styles.confirmButton,
+              pressed && { opacity: 0.9 }
+            ]}
+            accessibilityLabel="Confirm Purchase"
+          >
+            <Icon name="check-circle" size={18} color="#fff" />
+            <Text style={styles.confirmButtonText}>Confirm</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.viewButton,
+            pressed && { opacity: 0.8 }
+          ]}
+          accessibilityLabel="View Details"
+        >
+          <Icon name="arrow-forward-ios" size={16} color={PALETTE.green700} />
+          <Text style={styles.viewButtonText}>View Details</Text>
+        </Pressable>
+      )}
     </View>
   </Pressable>
 );
@@ -507,6 +564,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: PALETTE.green700,
+    marginLeft: 6,
+  },
+  confirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: PALETTE.green700,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: PALETTE.green700,
+  },
+  confirmButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
     marginLeft: 6,
   },
   emptyContainer: {
