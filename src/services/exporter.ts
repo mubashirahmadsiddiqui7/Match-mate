@@ -165,3 +165,15 @@ export function getStatusColor(status: string) {
 export function getStatusText(status: string) {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
+
+// Get purchases for traceability dropdown
+export async function fetchPurchasesForTraceability(): Promise<ExporterPurchase[]> {
+  const json = await api('/exporter-purchases', { method: 'GET', query: { status: 'completed', per_page: 100 } });
+  
+  const envelope = json?.data;
+  if (!envelope || !Array.isArray(envelope.data)) {
+    return [];
+  }
+
+  return envelope.data as ExporterPurchase[];
+}

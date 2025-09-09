@@ -84,4 +84,33 @@ export async function fetchExporterCompanies(): Promise<ExporterCompany[]> {
   return data as ExporterCompany[];
 }
 
+// Purchase prefill for traceability
+export type PurchasePrefillData = {
+  purchase_id: number;
+  company_id: number;
+  final_product_name: string;
+  final_weight_quantity: number;
+  total_quantity_kg: number;
+  lots: Array<{
+    lot_no: string;
+    quantity_kg: number;
+  }>;
+  middle_man: {
+    id: number;
+    name: string;
+    company_name: string;
+  };
+  exporter: {
+    id: number;
+    name: string;
+    company_name: string;
+    email: string;
+  };
+};
+
+export async function fetchPurchasePrefill(purchaseId: number | string): Promise<PurchasePrefillData> {
+  const json = await api(`/exporter-purchases/${purchaseId}/traceability-prefill`, { method: 'GET' });
+  return json?.data ?? json;
+}
+
 
