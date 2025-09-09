@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +16,11 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import PALETTE from '../../theme/palette';
 import { ExporterStackParamList } from '../../app/navigation/stacks/ExporterStack';
 import { TraceabilityRecord } from '../../services/traceability';
+import { getAuthToken, BASE_URL, join } from '../../services/https';
+import Toast from 'react-native-toast-message';
+import RNFS from 'react-native-fs';
+import FileViewer from 'react-native-file-viewer';
+import Share from 'react-native-share';
 
 type ViewRecordRouteProp = RouteProp<ExporterStackParamList, 'ViewRecord'>;
 type ViewRecordNavigationProp = NativeStackNavigationProp<ExporterStackParamList, 'ViewRecord'>;
@@ -29,8 +36,313 @@ export default function ViewRecord() {
     navigation.goBack();
   };
 
-  const handleGenerateDocument = () => {
-    navigation.navigate('traceabilityForm', { recordId: record.id });
+  const requestStoragePermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const androidVersion = Platform.Version;
+        console.log('Android version:', androidVersion);
+
+        if (androidVersion >= 33) {
+          // For Android 13+, we can use app's internal storage without permission
+          return true;
+        } else {
+          // For older Android versions, request WRITE_EXTERNAL_STORAGE
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            {
+              title: 'Storage Permission',
+              message: 'This app needs access to storage to download PDF files.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          return granted === PermissionsAndroid.RESULTS.GRANTED;
+        }
+      } catch (err) {
+        console.warn('Permission request error:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleGenerateDocument = async () => {
+    try {
+      // Show loading toast with progress
+      Toast.show({
+        type: 'info',
+        text1: 'Generating Document',
+        text2: `Creating PDF for ${record.document_no}...`,
+        position: 'top',
+        visibilityTime: 3000,
+      });
+
+      // Request storage permission
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Required',
+          text2: 'Storage permission is needed to download PDF files.',
+          position: 'top',
+        });
+        return;
+      }
+
+      // Step 1: Generate document and get download URL
+      Toast.show({
+        type: 'info',
+        text1: 'Step 1/3',
+        text2: 'Requesting document generation...',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+
+      const response = await fetch(join(BASE_URL, `traceability-records/${record.id}/generate-document`), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${await getAuthToken()}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error (${response.status}): ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('📄 PDF Response Data:', responseData);
+
+      if (!responseData.success || !responseData.download_url) {
+        throw new Error('Invalid response: Document generation failed or no download URL provided');
+      }
+
+      console.log('✅ PDF Download URL received:', responseData.download_url);
+
+      // Step 2: Download PDF
+      Toast.show({
+        type: 'info',
+        text1: 'Step 2/3',
+        text2: 'Downloading PDF file...',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+
+      const pdfResponse = await fetch(responseData.download_url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/pdf',
+          'User-Agent': 'MFD-TraceFish-Mobile/1.0',
+        },
+      });
+
+      if (!pdfResponse.ok) {
+        throw new Error(`Download failed (${pdfResponse.status}): Unable to download PDF from server`);
+      }
+
+      // Check content type
+      const contentType = pdfResponse.headers.get('content-type');
+      if (!contentType || !contentType.includes('pdf')) {
+        console.warn('⚠️ Unexpected content type:', contentType);
+      }
+
+      // Get the PDF blob
+      const pdfBlob = await pdfResponse.blob();
+      console.log('📦 PDF Blob size:', pdfBlob.size, 'bytes');
+
+      if (pdfBlob.size === 0) {
+        throw new Error('Downloaded PDF file is empty');
+      }
+
+      // Step 3: Save to device
+      Toast.show({
+        type: 'info',
+        text1: 'Step 3/3',
+        text2: 'Saving to device...',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+
+      // Convert blob to base64
+      const reader = new FileReader();
+      
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const base64PDF = base64Data.split(',')[1]; // Remove data:application/pdf;base64, prefix
+          
+          // Create filename with timestamp for uniqueness
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileName = `traceability-${record.document_no}-${timestamp}.pdf`;
+          
+          // Try multiple directories for better compatibility
+          // Prioritize app storage over Downloads folder to avoid permission issues
+          const possiblePaths = [
+            `${RNFS.DocumentDirectoryPath}/${fileName}`, // App's document directory (most reliable)
+            `${RNFS.CachesDirectoryPath}/${fileName}`,   // App's cache directory
+            `${RNFS.DownloadDirectoryPath}/${fileName}`, // Downloads folder (may require special permissions)
+          ].filter(Boolean);
+
+          let filePath = '';
+          let success = false;
+          let locationMessage = '';
+
+          for (const path of possiblePaths) {
+            if (!path) continue;
+            
+            try {
+              // Ensure directory exists
+              const dirPath = path.substring(0, path.lastIndexOf('/'));
+              const dirExists = await RNFS.exists(dirPath);
+              if (!dirExists) {
+                await RNFS.mkdir(dirPath);
+              }
+              
+              await RNFS.writeFile(path, base64PDF, 'base64');
+              filePath = path;
+              success = true;
+              
+              // Determine location message
+              if (path.includes('DownloadDirectoryPath')) {
+                locationMessage = 'Downloads folder';
+              } else if (path.includes('DocumentDirectoryPath')) {
+                locationMessage = 'App Documents folder';
+              } else if (path.includes('CachesDirectoryPath')) {
+                locationMessage = 'App Cache folder';
+              }
+              
+              break;
+            } catch (error) {
+              console.warn(`Failed to write to ${path}:`, error);
+              continue;
+            }
+          }
+
+          if (!success) {
+            throw new Error('Failed to save PDF to any available directory. Please check storage permissions.');
+          }
+          
+          console.log('✅ PDF saved successfully to:', filePath);
+          
+          // Success notification
+          Toast.show({
+            type: 'success',
+            text1: 'Download Complete! 🎉',
+            text2: `PDF saved to ${locationMessage}`,
+            position: 'top',
+            visibilityTime: 4000,
+          });
+          
+          // Show detailed success alert with action options
+          Alert.alert(
+            'Download Complete',
+            `PDF document has been successfully saved!\n\n📁 Location: ${locationMessage}\n📄 File: ${fileName}\n📊 Size: ${(pdfBlob.size / 1024).toFixed(1)} KB`,
+            [
+              {
+                text: 'Open PDF',
+                onPress: async () => {
+                  try {
+                    await FileViewer.open(filePath, {
+                      showOpenWithDialog: true,
+                      showAppsSuggestions: true,
+                    });
+                  } catch (error) {
+                    console.error('Error opening PDF:', error);
+                    Toast.show({
+                      type: 'error',
+                      text1: 'Open Failed',
+                      text2: 'No app available to open PDF files',
+                      position: 'top',
+                    });
+                  }
+                },
+              },
+              {
+                text: 'Share PDF',
+                onPress: async () => {
+                  try {
+                    // Convert file path to proper URI format
+                    const fileUri = Platform.OS === 'android' 
+                      ? `file://${filePath}` 
+                      : `file://${filePath}`;
+                    
+                    console.log('Sharing PDF with URI:', fileUri);
+                    
+                    const shareOptions = {
+                      title: `Traceability Record - ${record.document_no}`,
+                      message: `Traceability Record PDF: ${record.document_no}`,
+                      url: fileUri,
+                      type: 'application/pdf',
+                      subject: `Traceability Record - ${record.document_no}`,
+                    };
+                    await Share.open(shareOptions);
+                  } catch (error) {
+                    console.error('Error sharing PDF:', error);
+                    Toast.show({
+                      type: 'error',
+                      text1: 'Share Failed',
+                      text2: 'Unable to share PDF file. Please try opening the file directly.',
+                      position: 'top',
+                    });
+                  }
+                },
+              },
+              {
+                text: 'OK',
+                style: 'default',
+              },
+            ]
+          );
+          
+        } catch (writeError: any) {
+          console.error('❌ Error saving PDF:', writeError);
+          Toast.show({
+            type: 'error',
+            text1: 'Save Failed',
+            text2: `Failed to save PDF: ${writeError?.message || 'Unknown error'}`,
+            position: 'top',
+          });
+        }
+      };
+      
+      reader.onerror = (error) => {
+        console.error('❌ FileReader error:', error);
+        Toast.show({
+          type: 'error',
+          text1: 'Conversion Failed',
+          text2: 'Failed to process PDF data for saving.',
+          position: 'top',
+        });
+      };
+      
+      reader.readAsDataURL(pdfBlob);
+      
+    } catch (error) {
+      console.error('❌ Error generating document:', error);
+      
+      // More specific error messages
+      let errorMessage = 'Failed to generate document. Please try again.';
+      const errorMsg = (error as Error).message || '';
+      if (errorMsg.includes('Server error')) {
+        errorMessage = 'Server error occurred. Please check your connection and try again.';
+      } else if (errorMsg.includes('Download failed')) {
+        errorMessage = 'Failed to download PDF. The file may be temporarily unavailable.';
+      } else if (errorMsg.includes('empty')) {
+        errorMessage = 'The generated PDF file is empty. Please contact support.';
+      } else if (errorMsg.includes('permission')) {
+        errorMessage = 'Storage permission denied. Please enable storage access in settings.';
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Generation Failed',
+        text2: errorMessage,
+        position: 'top',
+        visibilityTime: 5000,
+      });
+    }
   };
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -192,6 +504,7 @@ export default function ViewRecord() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+      <Toast />
     </View>
   );
 }
