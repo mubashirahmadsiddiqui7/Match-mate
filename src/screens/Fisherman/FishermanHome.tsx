@@ -384,13 +384,13 @@ export default function FishermanHome() {
         </View>
 
         {/* Logout (secondary) */}
-      <Pressable
+      {/* <Pressable
           onPress={confirmLogout}
           style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
         >
           <Icon name="logout" size={18} color="#fff" />
           <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
-      </Pressable>
+      </Pressable> */}
 
         {/* Footer space */}
         <View style={{ height: 16 }} />
