@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +9,6 @@ import {
   Platform,
   TextInput,
   Image,
-  TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -26,7 +25,6 @@ const TEXT_DARK = '#0B1220';
 const TEXT_MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
 const PLACEHOLDER = '#9CA3AF';
-
 type Nav = StackNavigationProp<RootStackParamList, 'Login'>;
 
 type UserType = 'Fisherman' | 'FCS' | 'Middleman' | 'Exporter' | 'MFD';
@@ -115,6 +113,8 @@ const SignUp = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formLevelError, setFormLevelError] = useState<string>('');
+  const scrollRef = useRef<ScrollView>(null);
 
   const updateFormData = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -123,16 +123,9 @@ const SignUp = () => {
     }
   };
 
-  // Helper function to get input style with error state
-  const getInputStyle = (fieldName: string) => [
-    styles.input,
-    errors[fieldName] && styles.inputError
-  ];
-
-  const getPasswordInputStyle = (fieldName: string) => [
-    styles.passwordInput,
-    errors[fieldName] && styles.inputError
-  ];
+  // Input styles (no red borders — errors shown as text only)
+  const getInputStyle = (fieldName: string) => [styles.input];
+  const getPasswordInputStyle = (fieldName: string) => [styles.passwordInput];
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -186,7 +179,18 @@ const SignUp = () => {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const hasAnyError = Object.keys(newErrors).length > 0;
+    if (hasAnyError) {
+      const firstMessage = Object.values(newErrors)[0];
+      setFormLevelError(firstMessage || 'Please review the highlighted fields.');
+      // Ensure user sees the alert
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
+    } else {
+      setFormLevelError('');
+    }
+    return !hasAnyError;
   };
 
   // Map form user types to API user types
@@ -320,24 +324,18 @@ const SignUp = () => {
         });
         
         setErrors(serverErrors);
-        
-        // Show a toast with the first error for immediate feedback
         const firstError = Object.values(serverErrors)[0];
-        Toast.show({
-          type: 'error',
-          text1: 'Validation Error',
-          text2: firstError || 'Please check the form for errors.',
-          visibilityTime: 3000,
-          autoHide: true
+        setFormLevelError(firstError || 'Please check the form for errors.');
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
         });
       } else {
         // Handle other types of errors
-        Toast.show({
-          type: 'error',
-          text1: 'Account Creation Failed',
-          text2: error?.message || 'Failed to create account. Please try again.',
-          visibilityTime: 4000,
-          autoHide: true
+        const statusText = error?.response?.status ? ` (Code ${error.response.status})` : '';
+        const message = error?.message || 'Failed to create account. Please try again.';
+        setFormLevelError(`Account creation failed${statusText}. ${message}`);
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
         });
       }
     } finally {
@@ -807,7 +805,6 @@ const SignUp = () => {
 
     return (
     <View style={styles.container}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.container}>
         {/* Top Header */}
         <View style={styles.header}>
@@ -832,11 +829,26 @@ const SignUp = () => {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardView}
           >
-            <ScrollView 
+            <ScrollView
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'on-drag' : 'interactive'}
               showsVerticalScrollIndicator={false}
+              ref={scrollRef}
             >
+              {!!formLevelError && (
+                <View style={styles.formAlert}>
+                  <View style={styles.formAlertHeader}>
+                    <MaterialIcons name="error-outline" size={20} color="#DC2626" />
+                    <Text style={styles.formAlertTitle}>We found some issues</Text>
+                    <TouchableOpacity onPress={() => setFormLevelError('')} style={styles.formAlertDismiss}>
+                      <MaterialIcons name="close" size={18} color={TEXT_MUTED} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.formAlertText}>{formLevelError}</Text>
+                </View>
+              )}
               <View style={styles.formHeader}>
                 <Text style={styles.title}>Create Professional Account</Text>
                 <Text style={styles.subtitle}>Join the Marine Fisheries Department portal</Text>
@@ -852,23 +864,7 @@ const SignUp = () => {
               {renderContactSection()}
               {renderSecuritySection()}
 
-              {/* Validation Error Alert */}
-              {Object.keys(errors).length > 0 && (
-                <View style={styles.validationErrorAlert}>
-                  <View style={styles.validationErrorHeader}>
-                    <MaterialIcons name="error" size={20} color="#DC2626" />
-                    <Text style={styles.validationErrorTitle}>Account Creation Failed</Text>
-                  </View>
-                  <Text style={styles.validationErrorSubtitle}>Validation errors:</Text>
-                  <View style={styles.validationErrorList}>
-                    {Object.entries(errors).map(([field, message]) => (
-                      <Text key={field} style={styles.validationErrorItem}>
-                        • {message}
-                      </Text>
-                    ))}
-                  </View>
-                </View>
-              )}
+              {/* Validation Error Alert removed as requested */}
 
               <View style={styles.buttonContainer}>
               <TouchableOpacity
@@ -896,7 +892,6 @@ const SignUp = () => {
         </KeyboardAvoidingView>
         </View>
         </View>
-      </TouchableWithoutFeedback>
       <Toast />
     </View>
   );
@@ -1021,11 +1016,15 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: BORDER,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1099,23 +1098,33 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     fontSize: 14,
     color: TEXT_DARK,
     backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
   },
   passwordInput: {
     flex: 1,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     fontSize: 14,
     color: TEXT_DARK,
   },
@@ -1162,12 +1171,45 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 18,
   },
+  validationErrorMore: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    opacity: 0.9,
+  },
+  formAlert: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  formAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  formAlertTitle: {
+    flex: 1,
+    marginLeft: 8,
+    color: '#7F1D1D',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  formAlertDismiss: {
+    padding: 4,
+  },
+  formAlertText: {
+    color: '#7F1D1D',
+    fontSize: 12,
+  },
   buttonContainer: {
     marginTop: 24,
   },
   createButton: {
     backgroundColor: GREEN,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1191,7 +1233,7 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     backgroundColor: '#374151',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
