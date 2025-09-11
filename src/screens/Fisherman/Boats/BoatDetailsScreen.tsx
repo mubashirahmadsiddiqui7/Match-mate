@@ -1,5 +1,5 @@
 // src/screens/Fisherman/Boats/BoatDetailsScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -24,12 +26,12 @@ export default function BoatDetailsScreen() {
   
   const [boat, setBoat] = useState<Boat | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [showAllPhotos, setShowAllPhotos] = useState(false);
 
-  useEffect(() => {
-    fetchBoatDetails();
-  }, [boatId]);
-
-  const fetchBoatDetails = async () => {
+  const fetchBoatDetails = useCallback(async () => {
     try {
       setLoading(true);
       console.log('Fetching boat details for ID:', boatId);
@@ -46,10 +48,14 @@ export default function BoatDetailsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [boatId]);
+
+  useEffect(() => {
+    fetchBoatDetails();
+  }, [fetchBoatDetails]);
 
   const handleEdit = () => {
-    navigation.navigate('EditBoat', { boatId });
+    (navigation as any).navigate('EditBoat', { boatId });
   };
 
   const handleDelete = () => {
@@ -72,6 +78,33 @@ export default function BoatDetailsScreen() {
         },
       ]
     );
+  };
+
+  const handlePhotoPress = (photoIndex: number) => {
+    if (!boat?.photos) return;
+    setCurrentPhotoIndex(photoIndex);
+    setSelectedPhoto(`https://smartaisoft.com/MFD-Trace-Fish/public/storage/${boat.photos[photoIndex].path}`);
+    setPhotoModalVisible(true);
+  };
+
+  const navigatePhoto = (direction: 'prev' | 'next') => {
+    if (!boat?.photos) return;
+    const totalPhotos = boat.photos.length;
+    let newIndex = currentPhotoIndex;
+    
+    if (direction === 'prev') {
+      newIndex = currentPhotoIndex > 0 ? currentPhotoIndex - 1 : totalPhotos - 1;
+    } else {
+      newIndex = currentPhotoIndex < totalPhotos - 1 ? currentPhotoIndex + 1 : 0;
+    }
+    
+    setCurrentPhotoIndex(newIndex);
+    setSelectedPhoto(`https://smartaisoft.com/MFD-Trace-Fish/public/storage/${boat.photos[newIndex].path}`);
+  };
+
+  const getDisplayPhotos = () => {
+    if (!boat?.photos) return [];
+    return showAllPhotos ? boat.photos : boat.photos.slice(0, 6);
   };
 
   if (loading) {
@@ -303,6 +336,61 @@ export default function BoatDetailsScreen() {
           </View>
         </View>
 
+        {/* Boat Photos */}
+        {boat.photos && boat.photos.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Icon name="photo-camera" size={20} color={PALETTE.green700} />
+              <Text style={styles.sectionTitle}>Boat Photos</Text>
+              <Text style={styles.photoCountBadge}>
+                {boat.photos.length}
+              </Text>
+            </View>
+            
+            <View style={styles.photoGrid}>
+              {getDisplayPhotos().map((photo, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.photoItem}
+                  onPress={() => handlePhotoPress(index)}
+                >
+                  <Image
+                    source={{ uri: `https://smartaisoft.com/MFD-Trace-Fish/public/storage/${photo.path}` }}
+                    style={styles.photoImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.photoOverlay}>
+                    <Icon name="zoom-in" size={20} color="#fff" />
+                  </View>
+                  {index === 5 && !showAllPhotos && boat.photos && boat.photos.length > 6 && (
+                    <View style={styles.morePhotosOverlay}>
+                      <Text style={styles.morePhotosText}>
+                        +{boat.photos.length - 6} more
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            {boat.photos && boat.photos.length > 6 && (
+              <TouchableOpacity
+                style={styles.showAllButton}
+                onPress={() => setShowAllPhotos(!showAllPhotos)}
+              >
+                <Text style={styles.showAllButtonText}>
+                  {showAllPhotos ? 'Show Less' : `Show All ${boat.photos.length} Photos`}
+                </Text>
+                <Icon 
+                  name={showAllPhotos ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
+                  size={20} 
+                  color={PALETTE.green700} 
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Owner Information */}
         {boat.owner && (
           <View style={styles.section}>
@@ -371,6 +459,57 @@ export default function BoatDetailsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Photo Viewer Modal */}
+      <Modal
+        visible={photoModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPhotoModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setPhotoModalVisible(false)}
+          >
+            <Icon name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          
+          {boat?.photos && boat.photos.length > 1 && (
+            <>
+              <TouchableOpacity
+                style={styles.modalNavButton}
+                onPress={() => navigatePhoto('prev')}
+              >
+                <Icon name="chevron-left" size={30} color="#fff" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalNavButton, styles.modalNavButtonRight]}
+                onPress={() => navigatePhoto('next')}
+              >
+                <Icon name="chevron-right" size={30} color="#fff" />
+              </TouchableOpacity>
+            </>
+          )}
+          
+          {selectedPhoto && (
+            <Image
+              source={{ uri: selectedPhoto }}
+              style={styles.modalImage}
+              resizeMode="contain"
+            />
+          )}
+          
+          {boat?.photos && boat.photos.length > 1 && (
+            <View style={styles.photoCounter}>
+              <Text style={styles.photoCounterText}>
+                {currentPhotoIndex + 1} of {boat.photos.length}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -537,5 +676,128 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  photoItem: {
+    width: '48%',
+    aspectRatio: 1,
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: PALETTE.surface,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+  },
+  photoCountBadge: {
+    backgroundColor: PALETTE.green700,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  morePhotosOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  morePhotosText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  showAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PALETTE.surface,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: PALETTE.green700,
+    marginTop: 8,
+  },
+  showAllButtonText: {
+    color: PALETTE.green700,
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  modalNavButton: {
+    position: 'absolute',
+    top: '50%',
+    left: 20,
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 10,
+    transform: [{ translateY: -20 }],
+  },
+  modalNavButtonRight: {
+    left: 'auto',
+    right: 20,
+  },
+  modalImage: {
+    width: Dimensions.get('window').width - 40,
+    height: Dimensions.get('window').height - 100,
+  },
+  photoCounter: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  photoCounterText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
 });

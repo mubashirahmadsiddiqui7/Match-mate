@@ -26,6 +26,10 @@ export interface Boat {
   home_port?: string | null;
   status: 'active' | 'maintenance' | 'retired';
   documents?: any | null;
+  photos?: Array<{
+    path: string;
+    uploaded_at: string;
+  }>;
   created_at: string;
   updated_at: string;
   owner_id?: number;
