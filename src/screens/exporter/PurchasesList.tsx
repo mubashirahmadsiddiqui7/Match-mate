@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, ActivityIndi
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import PALETTE from '../../theme/palette';
-import { fetchExporterPurchases, processExporterPurchase, completeExporterPurchase, type ExporterPurchase, getStatusColor, getStatusText, formatDate } from '../../services/exporter';
+import { fetchExporterPurchases, processExporterPurchase, completeExporterPurchase, verifyApproveExporterPurchase, type ExporterPurchase, getStatusColor, getStatusText, formatDate } from '../../services/exporter';
 
 export default function PurchasesList() {
   const navigation = useNavigation();
@@ -89,6 +89,34 @@ export default function PurchasesList() {
     }
   };
 
+  const handleVerifyApprove = async (item: ExporterPurchase) => {
+    const proceed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Verify & Approve',
+        'Are you sure you want to verify and approve this purchase?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Approve', style: 'default', onPress: () => resolve(true) },
+        ],
+        { cancelable: true },
+      );
+    });
+
+    if (!proceed) return;
+
+    try {
+      setActionLoading(item.id);
+      await verifyApproveExporterPurchase(item.id);
+      Alert.alert('Success', 'Purchase verified and approved successfully.');
+      load();
+    } catch (error) {
+      console.error('Error verifying purchase:', error);
+      Alert.alert('Error', 'Failed to verify and approve. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleViewDetails = (item: ExporterPurchase) => {
     // @ts-ignore
     navigation.navigate('PurchaseDetails', { purchaseId: item.id.toString() });
@@ -146,6 +174,31 @@ export default function PurchasesList() {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
+          {/* Verify & Approve when status is pending_verification */}
+          {String(item.status).toLowerCase() === 'pending_verification' && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleVerifyApprove(item);
+              }}
+              disabled={isLoading}
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.verifyButton,
+                pressed && { opacity: 0.9 },
+                isLoading && { opacity: 0.6 }
+              ]}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="verified" size={16} color="#fff" />
+                  <Text style={styles.actionButtonText}>Verify & Approve</Text>
+                </>
+              )}
+            </Pressable>
+          )}
           {item.status === 'confirmed' && (
             <Pressable
               onPress={(e) => {
@@ -353,6 +406,10 @@ const styles = StyleSheet.create({
   completeButton: {
     backgroundColor: '#4caf50',
     borderColor: '#4caf50',
+  },
+  verifyButton: {
+    backgroundColor: '#0ea5e9',
+    borderColor: '#0ea5e9',
   },
   viewButton: {
     backgroundColor: '#f8f9fa',

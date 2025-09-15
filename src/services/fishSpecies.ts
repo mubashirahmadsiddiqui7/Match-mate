@@ -1,6 +1,7 @@
 // src/services/fishSpecies.ts
 import { api, upload, unwrap } from './https';
 import RNFS from 'react-native-fs';
+import { Platform } from 'react-native';
 
 /** One species row */
 export type FishSpecies = {
@@ -54,59 +55,41 @@ export async function createFishSpecies(
   return unwrap<FishSpecies>(json);
 }
 
-/** Create species with photos (base64 JSON). Converts photos to base64 and sends as JSON. */
+/** Create species with photos using multipart form-data (server expects file uploads). */
 export async function createFishSpeciesWithPhotos(
   fishingActivityId: number | string,
   body: CreateFishSpeciesBody,
   photos: UploadablePhoto[],
 ) {
-  console.log('[FishSpecies] Starting base64 conversion for', photos.length, 'photos');
-  
-  // Convert photos to base64
-  const base64Photos: string[] = [];
+  console.log('[FishSpecies] Preparing multipart upload for', photos.length, 'photos');
+
+  const form = new FormData();
+
+  // Required fields
+  form.append('fishing_activity_id', String(fishingActivityId));
+  form.append('species_name', body.species_name);
+  form.append('quantity_kg', String(body.quantity_kg ?? body.quantity ?? 0));
+  form.append('quantity', String(body.quantity ?? body.quantity_kg ?? 0));
+  form.append('type', body.type);
+  if (body.grade != null) form.append('grade', String(body.grade));
+  if (body.notes != null) form.append('notes', String(body.notes));
+  if ((body as any).activity_code) form.append('activity_code', String((body as any).activity_code));
+  if ((body as any).trip_code) form.append('trip_code', String((body as any).trip_code));
+
+  // Photos [] (server validates photos.0 as image)
   for (let i = 0; i < photos.length; i++) {
-    const photo = photos[i];
-    if (!photo.uri) {
-      console.log(`[FishSpecies] Skipping photo ${i} - no URI`);
-      continue;
-    }
-    
-    console.log(`[FishSpecies] Converting photo ${i}:`, photo.uri);
-    
-    try {
-      // Convert file URI to base64 using react-native-fs
-      console.log(`[FishSpecies] Reading file: ${photo.uri}`);
-      const base64Data = await RNFS.readFile(photo.uri, 'base64');
-      console.log(`[FishSpecies] Photo ${i} base64 length:`, base64Data.length);
-      
-      base64Photos.push(base64Data);
-      console.log(`[FishSpecies] Photo ${i} converted successfully`);
-    } catch (error) {
-      console.warn(`[FishSpecies] Failed to convert photo ${i} to base64:`, error);
-    }
+    const p = photos[i];
+    if (!p?.uri) continue;
+    const uri = p.uri.startsWith('file://') || p.uri.startsWith('content://') ? p.uri : `file://${p.uri}`;
+    const name = p.name || uri.split('/').pop() || `photo_${i}.jpg`;
+    const type = p.type || (name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+    // iOS requires stripping file:// sometimes; RN handles both
+    form.append('photos[]', { uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri, name, type } as any);
   }
-  
-  console.log('[FishSpecies] Base64 conversion complete. Total photos:', base64Photos.length);
 
-  const payload = {
-    fishing_activity_id: fishingActivityId,
-    species_name: body.species_name,
-    quantity_kg: body.quantity_kg ?? body.quantity ?? 0,
-    quantity: body.quantity ?? body.quantity_kg ?? 0,
-    type: body.type,
-    grade: body.grade ?? null,
-    notes: body.notes ?? null,
-    photos: base64Photos,
-  };
+  console.log('[FishSpecies] Multipart form ready. Fields appended, sending upload...');
 
-  console.log('[FishSpecies] Final payload photos count:', payload.photos.length);
-  console.log('[FishSpecies] Sending request with photos...');
-
-  const json = await api(`/fishing-activities/${fishingActivityId}/add-fish-species`, {
-    method: 'POST',
-    body: payload,
-  });
-  
+  const json = await upload(`/fishing-activities/${fishingActivityId}/add-fish-species`, form);
   console.log('[FishSpecies] API response received');
   return unwrap<FishSpecies>(json);
 }

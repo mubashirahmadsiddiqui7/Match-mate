@@ -51,6 +51,7 @@ export type ExporterPurchase = {
   company: {
     id: number;
     name: string;
+    company_name?: string | null;
     email: string;
     phone: string;
     user_type: string;
@@ -126,6 +127,12 @@ export async function processExporterPurchase(id: number | string): Promise<Expo
 
 export async function completeExporterPurchase(id: number | string): Promise<ExporterPurchase> {
   const json = await api(`/exporter-purchases/${id}/complete`, { method: 'POST' });
+  return json?.data ?? json;
+}
+
+// Verify and approve purchase (for status pending_verification)
+export async function verifyApproveExporterPurchase(id: number | string): Promise<ExporterPurchase> {
+  const json = await api(`/exporter-purchases/${id}/verify`, { method: 'POST' });
   return json?.data ?? json;
 }
 
