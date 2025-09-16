@@ -192,7 +192,7 @@ export default function FishingActivityDetailsScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 14, gap: 12 }}>
           {/* Activity Information */}
-          <Section title={t('fisherman.activityInformation')} icon="info">
+          <Section title={`${t('fisherman.activityInformation')} / سرگرمی کی معلومات`} icon="info">
             <Row label={t('fisherman.activityNumber')} value={n(data?.activity_number)} />
             <Row label={t('fisherman.activityDate')} value={n(data?.activity_date)} />
             <Row label={t('fisherman.timeOfNetting')} value={n(data?.time_of_netting)} />
@@ -201,7 +201,7 @@ export default function FishingActivityDetailsScreen() {
           </Section>
 
           {/* Equipment Details */}
-          <Section title={t('fisherman.equipmentDetails')} icon="construction">
+          <Section title={`${t('fisherman.equipmentDetails')} / سامان کی تفصیلات`} icon="construction">
             {/* <Row
               label="Gear Type"
               value={n(data?.gear_type_label || data?.gear_type)}
@@ -222,7 +222,7 @@ export default function FishingActivityDetailsScreen() {
           </Section>
 
           {/* Trip Information */}
-          <Section title={t('fisherman.tripInformation')} icon="directions-boat">
+          <Section title={`${t('fisherman.tripInformation')} / سفر کی معلومات`} icon="directions-boat">
             {/* Pretty code from nested trip */}
             <Row label={t('fisherman.tripId')} value={n(data?.trip_id)} />
             {/* <Row label="Boat Name" value={n(data?.boat_name)} />
@@ -238,7 +238,7 @@ export default function FishingActivityDetailsScreen() {
           </Section>
 
           <Section
-            title={`${t('fisherman.fishSpecies')} (${data?.fish_species?.length || 0})`}
+            title={`${t('fisherman.fishSpecies')} / مچھلی کی اقسام (${data?.fish_species?.length || 0})`}
             icon="cruelty-free"
           >
             {data?.fish_species?.length ? (
@@ -311,7 +311,7 @@ export default function FishingActivityDetailsScreen() {
                     size={18}
                     color="#fff"
                   />
-                  <Text style={styles.primaryBtnText}>{t('fisherman.addFishSpecies')}</Text>
+                  <Text style={styles.primaryBtnText} numberOfLines={1} ellipsizeMode="tail">{`${t('fisherman.addFishSpecies')} / مچھلی کی قسم شامل کریں`}</Text>
                 </Pressable>
 
                 {/* Complete Activity - Second Row (only when fish species exist) */}
@@ -335,8 +335,8 @@ export default function FishingActivityDetailsScreen() {
                           size={18}
                           color="#fff"
                         />
-                        <Text style={styles.primaryBtnText}>
-                          {t('fisherman.completeActivity')}
+                        <Text style={styles.primaryBtnText} numberOfLines={1} ellipsizeMode="tail">
+                          {`${t('fisherman.completeActivity')} / سرگرمی مکمل کریں`}
                         </Text>
                       </>
                     )}

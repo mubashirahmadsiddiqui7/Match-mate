@@ -537,9 +537,9 @@ const onSave = methods.handleSubmit(async data => {
           <Icon name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Register New Boat</Text>
-          <Text style={styles.headerSubtitle}>
-            Provide complete boat details for registration
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">Register New Boat / نئی کشتی رجسٹر کریں</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail">
+            Provide complete boat details for registration / رجسٹریشن کے لیے مکمل تفصیلات دیں
           </Text>
         </View>
       </View>
@@ -557,8 +557,8 @@ const onSave = methods.handleSubmit(async data => {
             return null;
           })()}
           {/* Basic Boat Information */}
-          <Section title="Basic Information" icon="info">
-            <Field label="Boat Name" required error={formErrors.name?.message}>
+          <Section title="Basic Information / بنیادی معلومات" icon="info">
+            <Field label="Boat Name / کشتی کا نام" required error={formErrors.name?.message}>
               <Input
                 value={methods.watch('name')}
                 onChangeText={text => {
@@ -574,12 +574,12 @@ const onSave = methods.handleSubmit(async data => {
                     );
                   }, 100);
                 }}
-                placeholder="Enter boat name"
+                placeholder="Enter boat name / کشتی کا نام درج کریں"
               />
             </Field>
 
             <Field
-              label="Registration Number"
+              label="Registration Number / رجسٹریشن نمبر"
               required
               error={formErrors.registration_number?.message}
             >
@@ -588,13 +588,13 @@ const onSave = methods.handleSubmit(async data => {
                 onChangeText={text =>
                   methods.setValue('registration_number', text)
                 }
-                placeholder="e.g., B-12345"
+                placeholder="e.g., B-12345 / مثال: B-12345"
               />
             </Field>
 
             {/* Boat Type */}
             <Field
-              label="Boat Type"
+              label="Boat Type / کشتی کی قسم"
               required
               error={formErrors.type?.message}
             >
@@ -604,16 +604,16 @@ const onSave = methods.handleSubmit(async data => {
                   methods.setValue('type', value);
                 }}
                 options={[...BOAT_TYPES]}
-                placeholder="Select boat type"
+                placeholder="Select boat type / کشتی کی قسم منتخب کریں"
                 error={!!formErrors.type}
               />
             </Field>
           </Section>
 
           {/* Dimensions */}
-          <Section title="Dimensions" icon="straighten">
+          <Section title="Dimensions / جہتیں" icon="straighten">
             <Field
-              label="Length (m)"
+              label="Length (m) / لمبائی (m)"
               required
               error={formErrors.length_m?.message}
             >
@@ -622,14 +622,14 @@ const onSave = methods.handleSubmit(async data => {
                 onChangeText={text =>
                   methods.setValue('length_m', text.replace(/[^0-9.]/g, ''))
                 }
-                placeholder="e.g., 18.5"
+                placeholder="e.g., 18.5 / مثال: 18.5"
                 keyboardType="numeric"
                 error={!!formErrors.length_m}
               />
             </Field>
 
             <Field
-              label="Width (m)"
+              label="Width (m) / چوڑائی (m)"
               required
               error={formErrors.width_m?.message}
             >
@@ -638,14 +638,14 @@ const onSave = methods.handleSubmit(async data => {
                 onChangeText={text =>
                   methods.setValue('width_m', text.replace(/[^0-9.]/g, ''))
                 }
-                placeholder="e.g., 5.2"
+                placeholder="e.g., 5.2 / مثال: 5.2"
                 keyboardType="numeric"
                 error={!!formErrors.width_m}
               />
             </Field>
 
             <Field
-              label="Crew Capacity"
+              label="Crew Capacity / عملے کی گنجائش"
               required
               error={formErrors.capacity_crew?.message}
             >
@@ -654,7 +654,7 @@ const onSave = methods.handleSubmit(async data => {
                 onChangeText={text =>
                   methods.setValue('capacity_crew', text.replace(/[^0-9]/g, ''))
                 }
-                placeholder="e.g., 5"
+                placeholder="e.g., 5 / مثال: 5"
                 keyboardType="numeric"
                 error={!!formErrors.capacity_crew}
               />
@@ -662,9 +662,9 @@ const onSave = methods.handleSubmit(async data => {
           </Section>
 
           {/* Technical Specifications */}
-          <Section title="Technical Specifications" icon="engineering">
+          <Section title="Technical Specifications / تکنیکی خصوصیات" icon="engineering">
             <Field
-              label="Boat Size (tons)"
+              label="Boat Size (tons) / کشتی کا سائز (ٹن)"
               required
               error={formErrors.boat_size?.message}
             >
@@ -673,27 +673,27 @@ const onSave = methods.handleSubmit(async data => {
                 onChangeText={text =>
                   methods.setValue('boat_size', text.replace(/[^0-9.]/g, ''))
                 }
-                placeholder="e.g., 25.5"
+                placeholder="e.g., 25.5 / مثال: 25.5"
                 keyboardType="numeric"
                 error={!!formErrors.boat_size}
               />
             </Field>
 
             <Field
-              label="Engine Power"
+              label="Engine Power / انجن کی طاقت"
               required
               error={formErrors.engine_power?.message}
             >
               <Input
                 value={methods.watch('engine_power')}
                 onChangeText={text => methods.setValue('engine_power', text)}
-                placeholder="e.g., 500 HP"
+                placeholder="e.g., 500 HP / مثال: 500 HP"
                 error={!!formErrors.engine_power}
               />
             </Field>
 
             <Field
-              label="Year Built"
+              label="Year Built / تیاری کا سال"
               required
               error={formErrors.year_built?.message}
             >
@@ -701,13 +701,13 @@ const onSave = methods.handleSubmit(async data => {
                 value={methods.watch('year_built')}
                 onChange={value => methods.setValue('year_built', value)}
                 options={YEARS.map(String)}
-                placeholder="Select year"
+                placeholder="Select year / سال منتخب کریں"
                 error={!!formErrors.year_built}
               />
             </Field>
 
             <Field
-              label="Boat Capacity (tons)"
+              label="Boat Capacity (tons) / کشتی کی گنجائش (ٹن)"
               required
               error={formErrors.boat_capacity?.message}
             >
@@ -719,7 +719,7 @@ const onSave = methods.handleSubmit(async data => {
                     text.replace(/[^0-9.]/g, ''),
                   )
                 }
-                placeholder="e.g., 30.0"
+                placeholder="e.g., 30.0 / مثال: 30.0"
                 keyboardType="numeric"
                 error={!!formErrors.boat_capacity}
               />
@@ -727,24 +727,24 @@ const onSave = methods.handleSubmit(async data => {
           </Section>
 
           {/* Additional Specifications */}
-          <Section title="Additional Specifications" icon="settings">
+          <Section title="Additional Specifications / اضافی خصوصیات" icon="settings">
             <Field label="Boat License No">
               <Input
                 value={methods.watch('boat_license_no')}
                 onChangeText={text => methods.setValue('boat_license_no', text)}
-                placeholder="Boat license number"
+                placeholder="Boat license number / کشتی لائسنس نمبر"
               />
             </Field>
 
-            <Field label="MFD Approved No">
+            <Field label="MFD Approved No / ایم ایف ڈی منظوری نمبر">
               <Input
                 value={methods.watch('mfd_approved_no')}
                 onChangeText={text => methods.setValue('mfd_approved_no', text)}
-                placeholder="MFD approval number"
+                placeholder="MFD approval number / ایم ایف ڈی منظوری نمبر"
               />
             </Field>
 
-            <Field label="Capacity Weight (kg)">
+            <Field label="Capacity Weight (kg) / وزن کی گنجائش (کلو)">
               <Input
                 value={methods.watch('capacity_weight_kg')}
                 onChangeText={text =>
@@ -753,12 +753,12 @@ const onSave = methods.handleSubmit(async data => {
                     text.replace(/[^0-9]/g, ''),
                   )
                 }
-                placeholder="e.g., 5000"
+                placeholder="e.g., 5000 / مثال: 5000"
                 keyboardType="numeric"
               />
             </Field>
 
-            <Field label="Number of Fish Holds">
+            <Field label="Number of Fish Holds / مچھلی رکھنے کی جگہوں کی تعداد">
               <Input
                 value={methods.watch('number_of_fish_holds')}
                 onChangeText={text =>
@@ -767,20 +767,20 @@ const onSave = methods.handleSubmit(async data => {
                     text.replace(/[^0-9]/g, ''),
                   )
                 }
-                placeholder="e.g., 2"
+                placeholder="e.g., 2 / مثال: 2"
                 keyboardType="numeric"
               />
             </Field>
 
-            <Field label="Home Port">
+            <Field label="Home Port / ہوم پورٹ">
               <Input
                 value={methods.watch('home_port')}
                 onChangeText={text => methods.setValue('home_port', text)}
-                placeholder="Home port location"
+                placeholder="Home port location / ہوم پورٹ مقام"
               />
             </Field>
 
-            <Field label="Status" required>
+            <Field label="Status / حیثیت" required>
               <Dropdown
                 value={methods.watch('status')}
                 onChange={value =>
@@ -790,63 +790,63 @@ const onSave = methods.handleSubmit(async data => {
                   )
                 }
                 options={['active', 'maintenance', 'retired']}
-                placeholder="Select status"
+                placeholder="Select status / حیثیت منتخب کریں"
                 error={!!formErrors.status}
               />
             </Field>
           </Section>
 
           {/* Equipment & Information */}
-          <Section title="Equipment & Information" icon="build">
+          <Section title="Equipment & Information / آلات اور معلومات" icon="build">
             <Field label="Fishing Equipment">
               <Input
                 value={methods.watch('fishing_equipment')}
                 onChangeText={text =>
                   methods.setValue('fishing_equipment', text)
                 }
-                placeholder="Describe fishing equipment"
+                placeholder="Describe fishing equipment / ماہی گیری کا سامان بیان کریں"
                 multiline
                 numberOfLines={3}
               />
             </Field>
 
-            <Field label="Safety Equipment">
+            <Field label="Safety Equipment / حفاظتی سامان">
               <Input
                 value={methods.watch('safety_equipment')}
                 onChangeText={text =>
                   methods.setValue('safety_equipment', text)
                 }
-                placeholder="Describe safety equipment"
+                placeholder="Describe safety equipment / حفاظتی سامان بیان کریں"
                 multiline
                 numberOfLines={3}
               />
             </Field>
 
-            <Field label="Insurance Information">
+            <Field label="Insurance Information / انشورنس کی معلومات">
               <Input
                 value={methods.watch('insurance_info')}
                 onChangeText={text => methods.setValue('insurance_info', text)}
-                placeholder="Insurance details"
+                placeholder="Insurance details / انشورنس کی تفصیلات"
                 multiline
                 numberOfLines={2}
               />
             </Field>
 
-            <Field label="License Information">
+            <Field label="License Information / لائسنس کی معلومات">
               <Input
                 value={methods.watch('license_info')}
                 onChangeText={text => methods.setValue('license_info', text)}
-                placeholder="License details"
+                placeholder="License details / لائسنس کی تفصیلات"
                 multiline
                 numberOfLines={2}
               />
             </Field>
 
-            <Field label="Additional Notes">
+            <Field label="Additional Notes / اضافی نوٹس">
               <Input
                 value={methods.watch('notes')}
                 onChangeText={text => methods.setValue('notes', text)}
-                placeholder="Any additional information"
+                placeholder="Any additional information / اضافی معلومات"
                 multiline
                 numberOfLines={3}
               />
@@ -854,7 +854,7 @@ const onSave = methods.handleSubmit(async data => {
           </Section>
 
           {/* Image Upload */}
-          <Section title="Boat Photos" icon="photo-camera">
+          <Section title="Boat Photos / کشتی کی تصاویر" icon="photo-camera">
             <ImageUpload images={images} onImagesChange={setImages} />
           </Section>
 
@@ -874,7 +874,7 @@ const onSave = methods.handleSubmit(async data => {
               ) : (
                 <>
                   <Icon name="save" size={20} color="#fff" />
-                  <Text style={styles.saveButtonText}>Register Boat</Text>
+                  <Text style={styles.saveButtonText} numberOfLines={1} ellipsizeMode="tail">Register Boat / کشتی رجسٹر کریں</Text>
                 </>
               )}
             </Pressable>
@@ -928,16 +928,19 @@ const styles = StyleSheet.create({
   headerContent: {
     flex: 1,
     marginLeft: 10,
+    minWidth: 0, // allow text to shrink/ellipsize inside header
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
+    flexShrink: 1,
   },
   headerSubtitle: {
     marginTop: 2,
-    fontSize: 13,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.85)',
+    flexShrink: 1,
   },
   scrollView: {
     flex: 1,

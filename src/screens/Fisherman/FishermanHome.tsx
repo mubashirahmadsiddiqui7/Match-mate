@@ -309,7 +309,7 @@ export default function FishermanHome() {
         </View>
 
         {/* Species Overview */}
-        <View style={styles.card}>
+        {/* <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('fisherman.species')}</Text>
             <Pressable onPress={goLotsList} style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}>
@@ -321,7 +321,7 @@ export default function FishermanHome() {
           <View style={styles.statGrid}>
             <StatCard icon="set-meal" label={t('fisherman.allSpecies')} value={totalLots} onPress={goLotsList} />
           </View>
-        </View>
+        </View> */}
 
         {/* Boats Section */}
         <View style={styles.card}>
