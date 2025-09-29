@@ -49,6 +49,7 @@ export default function ExporterHome() {
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [errText, setErrText] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
   // Connectivity banner
   useEffect(() => {
@@ -110,7 +111,14 @@ export default function ExporterHome() {
   const confirmLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => dispatch<any>(logout()) },
+      { text: 'Logout', style: 'destructive', onPress: async () => {
+        try {
+          setIsLoggingOut(true);
+          await dispatch<any>(logout());
+        } finally {
+          setIsLoggingOut(false);
+        }
+      } },
     ]);
   }, [dispatch]);
 
@@ -182,11 +190,12 @@ export default function ExporterHome() {
         <Text style={[styles.appbarTitle, { textAlign: getTextAlign() }]}>{t('exporter.title')}</Text>
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.85 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [styles.iconBtn, (pressed || isLoggingOut) && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Logout"
         >
-          <Icon name="logout" size={22} color="#fff" />
+          {isLoggingOut ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="logout" size={22} color="#fff" />}
         </Pressable>
       </View>
 
@@ -370,15 +379,24 @@ export default function ExporterHome() {
         {/* Logout (secondary) */}
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [styles.logoutBtn, (pressed || isLoggingOut) && { opacity: 0.9 }]}
         >
-          <Icon name="logout" size={18} color="#fff" />
-          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
+          {isLoggingOut ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="logout" size={18} color="#fff" />}
+          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>{isLoggingOut ? 'Logging out…' : 'Logout'}</Text>
         </Pressable>
 
         {/* Footer space */}
         <View style={{ height: 16 }} />
       </ScrollView>
+      {isLoggingOut && (
+        <View style={styles.overlay}> 
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={PALETTE.green700} />
+            <Text style={{ marginTop: 10, color: PALETTE.text700, fontWeight: '600' }}>Signing you out…</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -613,5 +631,13 @@ const styles = StyleSheet.create({
     backgroundColor: PALETTE.green700,
     alignItems: 'center', justifyContent: 'center',
     marginRight: 12,
+  },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center',
+  },
+  overlayCard: {
+    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16,
+    borderRadius: 12, borderWidth: 1, borderColor: PALETTE.border, alignItems: 'center',
   },
 });

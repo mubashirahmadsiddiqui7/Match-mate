@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, TextInput, ScrollView, StatusBar, Platform, Modal, FlatList, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import PALETTE from '../../theme/palette';
 import { createExporterPurchase, fetchDistributions, fetchAssignments } from '../../services/middlemanDistribution';
 import { type ExporterCompany } from '../../services/traceability';
@@ -12,6 +12,8 @@ type LotRow = { lot_no: string; max?: number | null; quantity_kg: string; select
 
 export default function CreatePurchase() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
+  const hideFinalFields = !!(route as any)?.params?.hideFinalFields;
   const [distributionId, setDistributionId] = useState<string>('');
   const [companyId, setCompanyId] = useState('');
   const [reference, setReference] = useState('');
@@ -162,8 +164,8 @@ export default function CreatePurchase() {
 
   const submit = useCallback(async () => {
     const selectedLots = lots.filter(l => l.selected);
-    if (!distributionId || !companyId || selectedLots.length === 0 || selectedLots.some(l => !l.quantity_kg) || !finalWeight) {
-      showToast('Please fill all required fields: distribution, company, lots, and final weight.', 'error');
+    if (!distributionId || !companyId || selectedLots.length === 0 || selectedLots.some(l => !l.quantity_kg) || (!hideFinalFields && !finalWeight)) {
+      showToast('Please fill all required fields.' + (hideFinalFields ? '' : ' Include final weight.'), 'error');
       return;
     }
     try {
@@ -172,10 +174,10 @@ export default function CreatePurchase() {
         distribution_id: parseInt(distributionId, 10),
         company_id: companyId,
         purchase_reference: reference || undefined,
-        final_product_name: product || undefined,
+        final_product_name: hideFinalFields ? undefined : (product || undefined),
         processing_notes: notes || undefined,
         selected_lots: selectedLots.map(l => ({ lot_no: l.lot_no, quantity_kg: l.quantity_kg })),
-        final_weight_quantity: finalWeight,
+        final_weight_quantity: hideFinalFields ? undefined : finalWeight,
       });
       showToast('Purchase created successfully!', 'success');
       setTimeout(() => {
@@ -194,7 +196,7 @@ export default function CreatePurchase() {
     } finally {
       setSubmitting(false);
     }
-  }, [distributionId, companyId, reference, product, notes, finalWeight, lots, navigation]);
+  }, [distributionId, companyId, reference, product, notes, finalWeight, lots, navigation, hideFinalFields]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.surface }}>
@@ -241,13 +243,17 @@ export default function CreatePurchase() {
             </Text>
             <Icon name="arrow-drop-down" size={22} color={PALETTE.text700} />
           </Pressable>
-          <Field label="Final Product Name" value={product} onChangeText={setProduct} />
-          <Field label="Final Weight Quantity (kg)" value={finalWeight} onChangeText={setFinalWeight} keyboardType="decimal-pad" />
+          {hideFinalFields ? null : (
+            <>
+              <Field label="Final Product Name" value={product} onChangeText={setProduct} />
+              <Field label="Final Weight Quantity (kg)" value={finalWeight} onChangeText={setFinalWeight} keyboardType="decimal-pad" />
+            </>
+          )}
           <Field label="Purchase Reference" value={reference} onChangeText={setReference} />
           <Field label="Processing Notes" value={notes} onChangeText={setNotes} multiline />
         </View>
 
-        {/* Lots & Quantities */}
+        {/* Lots & cleaQuantities */}
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Icon name="pets" size={20} color={PALETTE.green700} />
@@ -298,8 +304,12 @@ export default function CreatePurchase() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Purchase Summary</Text>
           <SummaryRow label="Total Selected Quantity" value={`${totalSelectedKg.toFixed(2)} kg`} />
-          <SummaryRow label="Final Weight" value={`${finalWeightKg.toFixed(2)} kg`} />
-          <SummaryRow label="Processing Efficiency" value={`${efficiencyPct.toFixed(0)}%`} />
+          {hideFinalFields ? null : (
+            <>
+              <SummaryRow label="Final Weight" value={`${finalWeightKg.toFixed(2)} kg`} />
+              <SummaryRow label="Processing Efficiency" value={`${efficiencyPct.toFixed(0)}%`} />
+            </>
+          )}
         </View>
 
         <Pressable disabled={submitting} onPress={submit} style={({ pressed }) => [styles.submit, pressed && { opacity: 0.95 }, submitting && { opacity: 0.7 }]}>
@@ -371,7 +381,7 @@ export default function CreatePurchase() {
 
 function Field({ label, value, onChangeText, keyboardType, multiline, placeholder }: any) {
   return (
-    <View style={{ marginBottom: 10 }}>
+    <View style={{ marginBottom: 10,marginTop:5 }}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         value={value}

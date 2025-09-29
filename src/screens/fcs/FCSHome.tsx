@@ -21,6 +21,7 @@ import { getFCSDistributionCounts, fetchFCSDistributions, type FishLotDistributi
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/actions/authActions';
 import type { AuthState } from '../../redux/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Nav = NativeStackNavigationProp<FCSStackParamList>;
 
@@ -29,6 +30,7 @@ export default function FCSHome() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const auth = useSelector((s: { auth: AuthState }) => s.auth);
+  const insets = useSafeAreaInsets();
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,6 +46,7 @@ export default function FCSHome() {
     pending: 0,
   });
   const [recentDistributions, setRecentDistributions] = useState<FishLotDistribution[]>([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const userProfile: any = auth.user?.profile || auth.user || {};
 
   const loadData = useCallback(async () => {
@@ -90,7 +93,14 @@ export default function FCSHome() {
   const confirmLogout = useCallback(() => {
     Alert.alert(t('fcs.logoutTitle'), t('fcs.logoutConfirm'), [
       { text: t('common.cancel'), style: 'cancel' },
-      { text: t('fcs.logout'), style: 'destructive', onPress: () => (dispatch as any)(logout() as any) },
+      { text: t('fcs.logout'), style: 'destructive', onPress: async () => {
+        try {
+          setIsLoggingOut(true);
+          await (dispatch as any)(logout() as any);
+        } finally {
+          setIsLoggingOut(false);
+        }
+      } },
     ]);
   }, [dispatch, t]);
 
@@ -156,7 +166,7 @@ export default function FCSHome() {
     <View style={styles.container}>
       <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerContent}>
           <View style={styles.headerTextContainer}>
             <Text style={styles.welcomeText}>{t('fcs.headerWelcome')}</Text>
@@ -166,9 +176,10 @@ export default function FCSHome() {
             onPress={confirmLogout}
             accessibilityRole="button"
             accessibilityLabel={t('fcs.logout')}
-            style={({ pressed }) => [styles.headerIcon, pressed && { opacity: 0.85 }]}
+            disabled={isLoggingOut}
+            style={({ pressed }) => [styles.headerIcon, (pressed || isLoggingOut) && { opacity: 0.85 }]}
           >
-            <Icon name="logout" size={20} color="#fff" />
+            {isLoggingOut ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="logout" size={20} color="#fff" />}
           </Pressable>
         </View>
       </View>
@@ -328,6 +339,14 @@ export default function FCSHome() {
 
       {/* Footer spacer */}
       <View style={{ height: 8 }} />
+      {isLoggingOut && (
+        <View style={styles.overlay}> 
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={PALETTE.green700} />
+            <Text style={{ marginTop: 10, color: PALETTE.text700, fontWeight: '600' }}>{t('fcs.loggingOut') || 'Signing you out…'}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -350,7 +369,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: PALETTE.green700,
-    paddingTop: 16,
+    paddingTop: 0,
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
@@ -517,6 +536,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontSize: 12,
     fontWeight: '700',
+  },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center',
+  },
+  overlayCard: {
+    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16,
+    borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center',
   },
   cardLike: {
     backgroundColor: '#fff',

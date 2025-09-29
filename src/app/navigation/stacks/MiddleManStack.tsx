@@ -21,7 +21,7 @@ export type MiddleManStackParamList = {
   assignmentDetails: { assignmentId: number };
   Purchases: undefined;
   purchaseDetails: { purchaseId: number };
-  CreatePurchase: undefined;
+  CreatePurchase: { hideFinalFields?: boolean } | undefined;
   AddDistribution: undefined;
 };
 
@@ -65,6 +65,7 @@ export default function MiddleManStack() {
         name="CreatePurchase"
         component={CreatePurchase}
         options={{headerShown: false}}
+        initialParams={{ hideFinalFields: true }}
       />
       <Stack.Screen 
         name="purchaseDetails"

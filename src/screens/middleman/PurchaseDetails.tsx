@@ -98,6 +98,45 @@ export default function PurchaseDetails() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Summary Hero */}
+        <View style={styles.hero}>
+          <View style={styles.heroHeaderRow}>
+            <Text style={styles.heroTitle}>Purchase #{purchase.id}</Text>
+            <View style={[styles.statusBadge, { borderColor: statusColor }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusText}</Text>
+            </View>
+          </View>
+          <View style={styles.heroMetaGrid}>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Final Product</Text><Text style={styles.metaV}>{purchase.final_product_name || 'TBD'}</Text></View>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Exporter</Text><Text style={styles.metaV}>{purchase.exporter?.name || '—'}</Text></View>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Middle Man</Text><Text style={styles.metaV}>{purchase.middle_man?.name || '—'}</Text></View>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Company</Text><Text style={styles.metaV}>{purchase.company?.name || '—'}</Text></View>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Total Quantity</Text><Text style={styles.metaV}>{Number(purchase.total_quantity_kg).toFixed(2)} kg</Text></View>
+            <View style={styles.metaItem}><Text style={styles.metaK}>Final Weight</Text><Text style={styles.metaV}>{Number(purchase.final_weight_quantity).toFixed(2)} kg</Text></View>
+          </View>
+        </View>
+
+        {/* Purchased Lots quick view */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="inventory" size={20} color={PALETTE.blue700} />
+            <Text style={styles.cardTitle}>Purchased Lots ({purchase.purchased_lots.length})</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, paddingVertical: 12 }} contentContainerStyle={{ gap: 8 }}>
+            {(purchase.enriched_purchased_lots || purchase.purchased_lots).map((lot: any, index: number) => {
+              const enrichedLot = purchase.enriched_purchased_lots?.[index];
+              return (
+                <View key={index} style={styles.lotPill}>
+                  <Icon name="set-meal" size={14} color={PALETTE.text600} />
+                  <Text style={styles.lotPillText}>{lot.lot_no}</Text>
+                  <Text style={styles.lotPillQty}>{Number(lot.quantity_kg).toFixed(2)} kg</Text>
+                  {enrichedLot ? <Text style={styles.lotPillMeta}> • {enrichedLot.species_name} • Grade {enrichedLot.grade}</Text> : null}
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
         {/* Purchase Information Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -174,49 +213,18 @@ export default function PurchaseDetails() {
           </View>
         </View>
 
-        {/* Purchased Lots Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Icon name="inventory" size={20} color={PALETTE.blue700} />
-            <Text style={styles.cardTitle}>Purchased Lots ({purchase.purchased_lots.length})</Text>
+        {/* Processing Notes */}
+        {purchase.processing_notes ? (
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Icon name="notes" size={20} color={PALETTE.blue700} />
+              <Text style={styles.cardTitle}>Processing Notes</Text>
+            </View>
+            <View style={styles.cardContent}>
+              <Text style={styles.notesText}>{purchase.processing_notes}</Text>
+            </View>
           </View>
-          
-          <View style={styles.cardContent}>
-            {(purchase.enriched_purchased_lots || purchase.purchased_lots).map((lot, index) => {
-              const enrichedLot = purchase.enriched_purchased_lots?.[index];
-              return (
-                <View key={index} style={styles.lotItem}>
-                  <View style={styles.lotHeader}>
-                    <Text style={styles.lotNumber}>{lot.lot_no}</Text>
-                    <Text style={styles.lotQuantity}>{lot.quantity_kg} kg</Text>
-                  </View>
-                  {enrichedLot && (
-                    <View style={styles.lotDetails}>
-                      <View style={styles.lotDetailRow}>
-                        <Text style={styles.lotDetailLabel}>Species:</Text>
-                        <Text style={styles.lotDetailValue}>{enrichedLot.species_name}</Text>
-                      </View>
-                      <View style={styles.lotDetailRow}>
-                        <Text style={styles.lotDetailLabel}>Grade:</Text>
-                        <Text style={styles.lotDetailValue}>{enrichedLot.grade}</Text>
-                      </View>
-                      <View style={styles.lotDetailRow}>
-                        <Text style={styles.lotDetailLabel}>Type:</Text>
-                        <Text style={styles.lotDetailValue}>{enrichedLot.type}</Text>
-                      </View>
-                      {enrichedLot.notes && (
-                        <View style={styles.lotDetailRow}>
-                          <Text style={styles.lotDetailLabel}>Notes:</Text>
-                          <Text style={styles.lotDetailValue}>{enrichedLot.notes}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
+        ) : null}
 
         {/* Actions Card */}
         <View style={styles.card}>
@@ -394,4 +402,69 @@ const styles = StyleSheet.create({
     color: PALETTE.text600,
     fontStyle: 'italic',
   },
+  // New summary hero styles
+  hero: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  heroHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  heroTitle: {
+    color: PALETTE.text900,
+    fontWeight: '800',
+    fontSize: 18,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  heroMetaGrid: {
+    marginTop: 12,
+    rowGap: 8,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaK: { color: PALETTE.text600 },
+  metaV: { color: PALETTE.text900, fontWeight: '700' },
+  // lot quick pills
+  lotPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  lotPillText: { color: PALETTE.text700, fontWeight: '800', marginLeft: 6 },
+  lotPillQty: { color: PALETTE.text600, marginLeft: 8 },
+  lotPillMeta: { color: PALETTE.text500, marginLeft: 6, fontSize: 11 },
+  notesText: { color: PALETTE.text700 },
 });

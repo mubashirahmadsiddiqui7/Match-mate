@@ -21,6 +21,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MFDStaffStackParamList } from '../../app/navigation/stacks/MFDStaffStack';
 import { getTripCounts, type TripCounts } from '../../services/trips';
 import { getUser, type User } from '../../services/users';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Nav = NativeStackNavigationProp<MFDStaffStackParamList, 'MFDStaffHome'>;
 
@@ -45,12 +46,14 @@ const APPBAR_BG = '#1f720d';
 export default function MFDStaffHome() {
   const dispatch = useDispatch();
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
 
   const [online, setOnline] = useState<boolean>(true);
   const [counts, setCounts] = useState<TripCounts | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [errText, setErrText] = useState<string | null>(null);
 
   // Connectivity banner
@@ -103,7 +106,15 @@ export default function MFDStaffHome() {
   const confirmLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => dispatch(logout() as any) },
+      { text: 'Logout', style: 'destructive', onPress: async () => {
+        try {
+          setIsLoggingOut(true);
+          await dispatch(logout() as any);
+        } finally {
+          // Screen will likely unmount on successful logout; safe guard for race conditions
+          setIsLoggingOut(false);
+        }
+      } },
     ]);
   }, [dispatch]);
 
@@ -123,15 +134,19 @@ export default function MFDStaffHome() {
 
   return (
     <View style={{ flex: 1, backgroundColor: PALETTE.bg }}>
-      <StatusBar backgroundColor={'#1B5E20'} barStyle="light-content" />
+      <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" />
 
       {/* App Bar */}
-      <View style={styles.appbar}>
+      <View style={[
+        styles.appbar,
+        { paddingTop: insets.top, height: 56 + insets.top }
+      ]}>
         <View style={styles.appbarSide} />
         <Text style={styles.appbarTitle}>MFD Dashboards</Text>
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.85 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [styles.iconBtn, (pressed || isLoggingOut) && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Logout"
         >
@@ -347,15 +362,33 @@ export default function MFDStaffHome() {
         {/* Logout (secondary) */}
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [
+            styles.logoutBtn,
+            (pressed || isLoggingOut) && { opacity: 0.9 }
+          ]}
         >
-          <Icon name="logout" size={18} color="#fff" />
-          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
+          {isLoggingOut ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Icon name="logout" size={18} color="#fff" />
+          )}
+          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>
+            {isLoggingOut ? 'Logging out…' : 'Logout'}
+          </Text>
         </Pressable>
 
         {/* Footer space */}
         <View style={{ height: 16 }} />
       </ScrollView>
+      {isLoggingOut && (
+        <View style={styles.overlay}> 
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={PALETTE.green700} />
+            <Text style={{ marginTop: 10, color: PALETTE.text700, fontWeight: '600' }}>Signing you out…</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -531,8 +564,8 @@ function ManagementModule({
 const styles = StyleSheet.create({
   appbar: {
     backgroundColor: APPBAR_BG,
-    paddingTop: Platform.OS === 'ios' ? 10 : 0,
-    height: 56 + (Platform.OS === 'ios' ? 10 : 0),
+    paddingTop: 0,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -699,5 +732,24 @@ const styles = StyleSheet.create({
     backgroundColor: PALETTE.green700,
     alignItems: 'center', justifyContent: 'center',
     marginRight: 12,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayCard: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    alignItems: 'center',
   },
 });
