@@ -23,6 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
+import Slider from '@react-native-community/slider';
 
 import { FishermanStackParamList } from '../../../app/navigation/stacks/FishermanStack';
 import { useCurrentLocation } from './hooks/useCurrentLocation';
@@ -48,7 +49,7 @@ type R = RouteProp<FishermanStackParamList, 'FishingActivity'>;
 
 type FormValues = {
   activityNo: number;
-  mesh: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | null;
+  mesh: number | null;
   netLen: string;
   netWid: string;
   netting: Date | null;
@@ -148,7 +149,7 @@ export default function FishingActivity() {
   function safeApplyPrefill(a: any) {
     // These keys should exist on your adapted DTO (adjust if your adapter names differ)
     if (a?.activity_number) setValue('activityNo', a.activity_number);
-    if (a?.mesh_size) setValue('mesh', a.mesh_size as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | null);
+    if (a?.mesh_size) setValue('mesh', Number(a.mesh_size));
     if (a?.net_length) setValue('netLen', String(a.net_length));
     if (a?.net_width) setValue('netWid', String(a.net_width));
     
@@ -211,6 +212,14 @@ export default function FishingActivity() {
       errors.netWid = 'Net width must be a valid positive number';
     }
 
+    // Mesh size validation (optional but if provided, must be within range)
+    if (values.mesh != null) {
+      const meshVal = Number(values.mesh);
+      if (isNaN(meshVal) || meshVal < 1 || meshVal > 50) {
+        errors.mesh = 'Mesh size must be between 1 and 50';
+      }
+    }
+
     setFormErrors(errors);
     setFormLevelError(null);
     return Object.keys(errors).length === 0;
@@ -267,7 +276,7 @@ export default function FishingActivity() {
         activity_number: values.activityNo,
         time_of_netting: formatTimeForAPI(values.netting),
         time_of_hauling: formatTimeForAPI(values.hauling),
-        mesh_size: values.mesh,
+        mesh_size: (values.mesh != null ? Number(values.mesh) : null) as any,
         net_length: values.netLen ? Number(values.netLen) : null,
         net_width: values.netWid ? Number(values.netWid) : null,
         gps_latitude: gps!.lat,
@@ -480,26 +489,82 @@ export default function FishingActivity() {
             icon="grid-on"
           >
             <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Select Mesh Size / جالی کا سائز منتخب کریں</Text>
-              <View style={styles.meshGrid}>
-                {([1, 2, 3, 4, 5, 6, 7, 8] as const).map((size) => (
-                  <Pressable
-                    key={size}
-                    onPress={() => setValue('mesh', size)}
-                    style={[
-                      styles.meshButton,
-                      mesh === size && styles.meshButtonSelected
-                    ]}
-                  >
-                    <Text style={[
-                      styles.meshButtonText,
-                      mesh === size && styles.meshButtonTextSelected
-                    ]}>
-                      {size}
-                    </Text>
-                  </Pressable>
-                ))}
+            <Text style={styles.fieldLabel}>Select Mesh Size (1–50) / جالی کا سائز منتخب کریں</Text>
+            <View style={{ gap: 12 }}>
+              <Text style={{ fontWeight: '700', color: PALETTE.text900 }}>
+                {mesh != null ? `Selected: ${mesh}` : 'Not selected'}
+              </Text>
+
+              {/* Thicker, more visible slider with progress fill */}
+              <View
+                style={styles.sliderContainer}
+                onLayout={(e) => {
+                  const w = e.nativeEvent.layout.width;
+                  // cache width in a ref via setValue to avoid extra state; store in form as _sliderWidth
+                  // We won't submit it; just for layout math
+                  // @ts-ignore - store transient
+                  setValue('_sliderWidth' as any, w, { shouldValidate: false, shouldDirty: false });
+                }}
+              >
+                <View style={styles.sliderTrack} />
+                {/* Progress fill based on current mesh */}
+                <View
+                  style={[
+                    styles.sliderProgress,
+                    {
+                      // compute width from stored width if available
+                      width: (() => {
+                        // @ts-ignore read transient width
+                        const w = (getValues() as any)._sliderWidth || 0;
+                        const v = Math.max(1, Math.min(50, mesh ?? 1));
+                        const ratio = (v - 1) / 49; // 1..50
+                        return w * ratio;
+                      })(),
+                    },
+                  ]}
+                />
+                  {/* Triangle thumb indicator overlay */}
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.sliderThumbTriangle,
+                    {
+                      left: (() => {
+                        // @ts-ignore read transient width
+                        const w = (getValues() as any)._sliderWidth || 0;
+                        const v = Math.max(1, Math.min(50, mesh ?? 1));
+                        const ratio = (v - 1) / 49; // 1..50
+                        // Center the triangle horizontally (triangle half-width ~8)
+                        const x = w * ratio - 8;
+                        return Math.max(0, x);
+                      })(),
+                    },
+                  ]}
+                />
+                <Slider
+                  minimumValue={1}
+                  maximumValue={50}
+                  step={1}
+                  value={mesh ?? 1}
+                  minimumTrackTintColor={'transparent'}
+                  maximumTrackTintColor={'transparent'}
+                  thumbTintColor={'transparent'}
+                  onValueChange={(v: number) => setValue('mesh', Math.round(v))}
+                  accessibilityLabel="Mesh size slider"
+                />
               </View>
+              <View style={styles.sliderLabelsRow}>
+                <Text style={styles.sliderLabelText}>1</Text>
+                <Text style={styles.sliderLabelText}>50</Text>
+              </View>
+
+              {formErrors.mesh && (
+                <Text style={styles.errorText}>{formErrors.mesh}</Text>
+              )}
+              <Text style={styles.fieldDescription}>
+                Drag the triangle left or right to choose mesh size / مثلث کو بائیں یا دائیں کھینچیں
+              </Text>
+            </View>
             </View>
           </SectionCard>
 
@@ -827,6 +892,51 @@ const styles = StyleSheet.create({
   },
   sectionContent: {
     padding: 20,
+  },
+  sliderContainer: {
+    position: 'relative',
+    paddingVertical: 12,
+  },
+  sliderTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    height: 8,
+    backgroundColor: PALETTE.border,
+    borderRadius: 8,
+    transform: [{ translateY: -4 }],
+  },
+  sliderProgress: {
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    height: 8,
+    backgroundColor: PALETTE.green700,
+    borderRadius: 8,
+    transform: [{ translateY: -4 }],
+  },
+  sliderThumbTriangle: {
+    position: 'absolute',
+    top: '50%',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderBottomWidth: 12,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: PALETTE.green700,
+    transform: [{ translateY: 8 }],
+  },
+  sliderLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sliderLabelText: {
+    fontSize: 12,
+    color: PALETTE.text500,
+    fontWeight: '600',
   },
   fieldContainer: {
     marginBottom: 8,
