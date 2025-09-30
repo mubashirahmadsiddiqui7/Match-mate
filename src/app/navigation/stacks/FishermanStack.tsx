@@ -9,10 +9,14 @@ import TripDetailsScreen from '../../../screens/Fisherman/TripDetails/TripDetail
 import LotDetailsScreen from '../../../screens/Fisherman/LotsDetails/LotDetailsScreen';
 import OfflineQueueScreen from '../../../screens/Fisherman/OfflineQueue/OfflineQueueScreen';
 import BoatRegisterScreen from '../../../screens/Fisherman/AddBoat/BoatRegistrationScreen';
+import BoatsListScreen from '../../../screens/Fisherman/Boats/BoatsListScreen';
+import BoatDetailsScreen from '../../../screens/Fisherman/Boats/BoatDetailsScreen';
+import EditBoatScreen from '../../../screens/Fisherman/Boats/EditBoatScreen';
 import FishingActivity from '../../../screens/Fisherman/AddTrip/FishingActivity';
 import FishingActivitiesListScreen from '../../../screens/Fisherman/Activities/FishingActivitiesList';
 import FishingActivityDetailsScreen from '../../../screens/Fisherman/Activities/FishingActivityDetailsScreen';
 import RecordFishSpeciesScreen from '../../../screens/Fisherman/Activities/RecordFishSpeciesScreen';
+import Profile from '../../../screens/Fisherman/Profile';
 
 export type FishermanStackParamList = {
   FishermanHome: undefined;
@@ -21,8 +25,12 @@ export type FishermanStackParamList = {
   Trip: { id?: number | string; mode?: 'create' | 'edit' } | undefined;
 
   OfflineTrips: undefined;
-  Boat: undefined;
+  BoatRegister: undefined;
+  BoatsList: undefined;
+  BoatDetails: { boatId: number };
+  EditBoat: { boatId: number };
   AllTrip: undefined;
+  Profile:undefined
 
   // Trip details
   TripDetails: { id: number | string };
@@ -31,18 +39,6 @@ export type FishermanStackParamList = {
   LotsList: undefined;
   LotDetails: { id: number | string };
 
-  // FishingActivity:
-  //   | {
-  //       tripId: number | string; // UI trip code OR numeric; we’ll choose numeric later
-  //       activityNo?: number;
-  //       meta?: {
-  //         id: number | string; // DB PK (8) -> for API
-  //         captain?: string | null;
-  //         boat?: string | null;
-  //         trip_id?: string | number; // display code
-  //       };
-  //     }
-  //   | { mode: 'edit'; lotId: number | string };
     FishingActivity: {
     mode?: 'create' | 'edit';
     activityId?: number | string;
@@ -69,6 +65,7 @@ export type FishermanStackParamList = {
     tripCode?: string | null;
     activityNumber?: number | null;
     date?: string | null;
+    fallback?: any;
   };
 
   Lots: { tripId: number | string } | { mode: 'edit'; lotId: number | string };
@@ -86,7 +83,6 @@ export default function FishermanStack() {
     >
       <Stack.Screen name="FishermanHome" component={FishermanHome} />
       <Stack.Screen name="AllTrip" component={TripsScreen} />
-
       <Stack.Screen name="Trip" component={AddTripScreen} />
       <Stack.Screen name="FishingActivity" component={FishingActivity} />
       <Stack.Screen
@@ -107,8 +103,16 @@ export default function FishermanStack() {
         component={TripDetailsScreen}
         options={{ headerShown: false }}
       />
+       <Stack.Screen
+        name="Profile"
+        component={Profile}
+        options={{ headerShown: false }}
+      />
 
-      <Stack.Screen name="Boat" component={BoatRegisterScreen} />
+      <Stack.Screen name="BoatRegister" component={BoatRegisterScreen} />
+      <Stack.Screen name="BoatsList" component={BoatsListScreen} />
+      <Stack.Screen name="BoatDetails" component={BoatDetailsScreen} />
+      <Stack.Screen name="EditBoat" component={EditBoatScreen} />
       <Stack.Screen name="Lots" component={AddLotScreen} />
       <Stack.Screen name="LotsList" component={AllLotsScreen} />
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { s, theme } from '../styles';
 
@@ -23,7 +23,11 @@ export default function LocationCard({
 
       <TouchableOpacity style={s.btnGhost} onPress={onRecapture} disabled={loading}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <MaterialIcons name="my-location" size={18} color={theme.blue} />
+          {loading ? (
+            <ActivityIndicator size="small" color={theme.blue} />
+          ) : (
+            <MaterialIcons name="my-location" size={18} color={theme.blue} />
+          )}
           <Text style={s.btnGhostText}>{loading ? 'Getting location…' : 'Capture / Refresh Location'}</Text>
         </View>
       </TouchableOpacity>

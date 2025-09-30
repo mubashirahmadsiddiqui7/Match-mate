@@ -1,312 +1,670 @@
 /* eslint-disable react-native/no-inline-styles */
-/* eslint-disable react/no-unstable-nested-components */
-import React, { useCallback, useLayoutEffect, memo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
-  StyleSheet,
-  Pressable,
   Text,
-  Image,
-  SafeAreaView,
-  StatusBar,
+  StyleSheet,
   ScrollView,
-  useWindowDimensions,
-  ImageSourcePropType,
+  Pressable,
+  RefreshControl,
+  StatusBar,
+  Platform,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import NetInfo from '@react-native-community/netinfo';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../redux/actions/authActions';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
-import type { RootState } from '../../redux/store';
+import { FishermanStackParamList } from '../../app/navigation/stacks/FishermanStack';
+import { getTripCounts, type TripCounts } from '../../services/trips';
+import { fetchFishLots, type FishLot } from '../../services/lots';
+import { getUser, type User } from '../../services/users';
 import PALETTE from '../../theme/palette';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '../../components/LanguageSwitcher';
+import BiText from '../../components/BiText';
+import { isRTL, getTextAlign } from '../../utils/rtl';
 
 type Nav = NativeStackNavigationProp<FishermanStackParamList, 'FishermanHome'>;
 
+const APPBAR_BG = '#1f720d';
 
-type ActionCardProps = {
-  label: string;
-  iconSource: ImageSourcePropType;
-  onPress: () => void;
-};
-
-const ActionCard = memo(({ label, iconSource, onPress }: ActionCardProps) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.actionCard,
-      pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
-    ]}
-    android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
-    accessibilityRole="button"
-    accessibilityLabel={label}
-  >
-    <Image source={iconSource} style={styles.actionIcon} />
-    <Text style={styles.actionLabel}>{label}</Text>
-  </Pressable>
-));
-
-const FishermanHome = () => {
+export default function FishermanHome() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const navigation = useNavigation<Nav>();
-  const { width, height: screenHeight } = useWindowDimensions();
 
-  const user = useSelector((s: RootState) => (s as any).auth?.user);
-  console.log("existing user", user)
-  const name = user?.name ?? 'Fisherman';
-  const role = (user?.role ?? user?.user_type ?? 'fisherman')
-    .toString()
-    .replace('_', ' ');
+  const [online, setOnline] = useState<boolean>(true);
+  const [counts, setCounts] = useState<TripCounts | null>(null);
+  const [lots, setLots] = useState<FishLot[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [errText, setErrText] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
-  const isCompact = width < 360;
+  // Connectivity banner
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(state => setOnline(!!state.isConnected));
+    NetInfo.fetch().then(s => setOnline(!!s.isConnected)).catch(() => {});
+    return () => { unsub && unsub(); };
+  }, []);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrText(null);
+    try {
+      const [tripCountsRes, lotsRes, userRes] = await Promise.allSettled([
+        getTripCounts(),
+        fetchFishLots({ page: 1, per_page: 10 }),
+        getUser(),
+      ]);
+
+      if (tripCountsRes.status === 'fulfilled') {
+        setCounts(tripCountsRes.value.totals);
+      }
+      if (lotsRes.status === 'fulfilled') {
+        setLots(lotsRes.value.items);
+      }
+      if (userRes.status === 'fulfilled') {
+        setUser(userRes.value);
+      }
+    } catch (e: any) {
+      setErrText(e?.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Reload when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadData]);
+
+  const confirmLogout = useCallback(() => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Yes, Logout', style: 'destructive', onPress: () => dispatch<any>(logout()) },
+      { text: 'Logout', style: 'destructive', onPress: async () => {
+        try {
+          setIsLoggingOut(true);
+          await dispatch<any>(logout());
+        } finally {
+          setIsLoggingOut(false);
+        }
+      } },
     ]);
   }, [dispatch]);
 
-  const navAllTrips = useCallback(() => navigation.navigate('AllTrip'), [navigation]);
-  const navOfflineTrips = useCallback(
-    () => navigation.navigate('OfflineTrips' as any),
-    [navigation],
-  );
-  const navNewTrip = useCallback(() => navigation.navigate('Trip'), [navigation]);
-  const navCreateLots = useCallback(() => navigation.navigate('Lots'), [navigation]);
-  const navAllLots = useCallback(() => navigation.navigate('LotsList'), [navigation]);
-  const navNewBoats = useCallback(() => navigation.navigate('Boat'), [navigation]);
-    const navAllActivity = useCallback(() => navigation.navigate('FishingActivities'), [navigation]);
+  const goAllTrips = useCallback(() => {
+    if (!online) {
+      Toast.show({
+        type: 'info',
+        text1: "You're offline",
+        text2: 'View Offline Trips instead.',
+      });
+      navigation.navigate('OfflineTrips');
+      return;
+    }
+    navigation.navigate('AllTrip');
+  }, [navigation, online]);
 
+  const goNewTrip = useCallback(() => {
+    navigation.navigate('Trip');
+  }, [navigation]);
 
+  const goOfflineTrips = useCallback(() => {
+    navigation.navigate('OfflineTrips');
+  }, [navigation]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions?.({
-      title: 'Fisherman',
-      headerStyle: { backgroundColor: PALETTE.green700 },
-      headerTintColor: '#FFFFFF',
-      headerTitleStyle: { color: '#FFFFFF', fontWeight: '800' },
-      headerShadowVisible: false,
-      headerRight: () => (
+  const goFishingActivities = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Activities require internet.' });
+      return;
+    }
+    navigation.navigate('FishingActivities');
+  }, [navigation, online]);
+
+  const goBoatsList = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Boats require internet.' });
+      return;
+    }
+    navigation.navigate('BoatsList');
+  }, [navigation, online]);
+
+  const goBoatRegister = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Registering boats requires internet.' });
+      return;
+    }
+    navigation.navigate('BoatRegister');
+  }, [navigation, online]);
+
+  const goLotsList = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Species list requires internet.' });
+      return;
+    }
+    navigation.navigate('LotsList');
+  }, [navigation, online]);
+
+  const goProfile = useCallback(() => {
+    if (!online) {
+      Toast.show({ type: 'info', text1: "You're offline", text2: 'Editing profile requires internet.' });
+      return;
+    }
+    navigation.navigate('Profile');
+  }, [navigation, online]);
+
+  const activeTrips = useMemo(() => {
+    return counts?.active || 0;
+  }, [counts]);
+
+  const totalTrips = useMemo(() => {
+    return counts?.all || 0;
+  }, [counts]);
+
+  const totalLots = useMemo(() => {
+    return lots.length;
+  }, [lots]);
+
+  const name = useMemo(() => {
+    return user?.name || user?.first_name || 'Fisherman';
+  }, [user]);
+
+  return (
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: APPBAR_BG }}>
+      <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" translucent={false} />
+      <LanguageSwitcher />
+      <View style={{ flex: 1, backgroundColor: PALETTE.green50 }}>
+
+      {/* App Bar */}
+      <View style={styles.appbar}>
+        <View style={styles.appbarSide} />
+        <BiText en={t('fisherman.title')} ur="ماہی گیر ڈیش بورڈ" style={styles.appbarTitle} />
         <Pressable
-          onPress={handleLogout}
-          style={({ pressed }) => [styles.headerLogoutBtn, pressed && { opacity: 0.85 }]}
+          onPress={confirmLogout}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [styles.iconBtn, (pressed || isLoggingOut) && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Logout"
         >
-          <Text style={styles.headerLogoutText}>⎋ Logout</Text>
+          {isLoggingOut ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="logout" size={22} color="#fff" />}
         </Pressable>
-      ),
-    });
-  }, [navigation, handleLogout]);
+      </View>
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
-
-      <View style={styles.screen}>
-        {/* Welcome / Profile */}
-        <View style={[styles.headerCard, isCompact && styles.headerCardCompact]}>
-          <View style={[styles.headerLeft, isCompact && styles.headerLeftCompact]}>
-            <Image
-              source={require('../../assets/images/placeholderIMG.png')}
-              style={[styles.avatar, isCompact && styles.avatarSm]}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.eyebrow, isCompact && { fontSize: 11 }]}>Welcome</Text>
-              <Text style={[styles.title, isCompact && styles.titleSm]} numberOfLines={1}>
-                {name}
+      {/* Online/Offline Banner */}
+      <View
+        style={[
+          styles.banner,
+          {
+            backgroundColor: online ? PALETTE.green50 : '#FFF7ED',
+            borderColor: online ? '#C8E6C9' : '#FED7AA',
+          },
+        ]}
+      >
+        <Icon
+          name={online ? 'wifi' : 'wifi-off'}
+          size={18}
+          color={online ? PALETTE.green700 : PALETTE.warn}
+        />
+              <Text
+          style={{
+            marginLeft: 8,
+            color: online ? PALETTE.green700 : PALETTE.warn,
+            flex: 1,
+          }}
+        >
+          {online ? t('fisherman.onlineStatus') : t('fisherman.offlineStatus')}
               </Text>
-              <View style={[styles.rolePill, isCompact && styles.rolePillTight]}>
-                <Text style={[styles.roleText, isCompact && { fontSize: 11 }]}>{role}</Text>
+                <Pressable
+          onPress={onRefresh}
+          style={({ pressed }) => [styles.refreshChip, pressed && { opacity: 0.85 }]}
+        >
+          <Icon name="refresh" size={16} color={PALETTE.text700} />
+          <Text style={{ color: PALETTE.text700, marginLeft: 6 }}>{t('common.refresh')}</Text>
+                </Pressable>
               </View>
+
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 28 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Welcome / Header Card */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={styles.avatar}>
+              <Icon name="sailing" size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.h1}>{t('fisherman.welcome')}, {name}!</Text>
+              <Text style={styles.subtle}>
+                {t('fisherman.portalDescription')}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.headerRight}>
-            <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Logout"
-            >
-              <Text style={styles.logoutText}>Logout</Text>
-            </Pressable>
+          <View style={styles.quickRow}>
+            <Chip icon="verified-user" label="Secure" tone="ok" />
+            <Chip icon="speed" label="Fast access" tone="info" />
+            <Chip icon="integration-instructions" label="API connected" tone={online ? 'ok' : 'warn'} />
           </View>
         </View>
 
-        {/* Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <ScrollView
-            style={{ maxHeight: Math.min(screenHeight * 0.93, 520) }}
-            contentContainerStyle={styles.actionsList}
-            showsVerticalScrollIndicator
-          >
-            <ActionCard
-              label="All Trips"
-              iconSource={require('../../assets/images/fishIcon.png')}
-              onPress={navAllTrips}
-            />
-            <ActionCard
-              label="Pending Offline Trips"
-              iconSource={require('../../assets/images/fishIcon.png')}
-              onPress={navOfflineTrips}
-            />
-            <ActionCard
-              label="+ New Trip"
-              iconSource={require('../../assets/images/boatIcon.png')}
-              onPress={navNewTrip}
-            />
-            <ActionCard
-              label="All Activities"
-              iconSource={require('../../assets/images/boatIcon.png')}
-              onPress={navAllActivity}
-            />
-            {/* <ActionCard
-              label="+ Register Boat"
-              iconSource={require('../../assets/images/boatIcon.png')}
-              onPress={navNewBoats}
-            /> */}
-            {/* <ActionCard
-              label="+ Create Lots"
-              iconSource={require('../../assets/images/fishIcon.png')}
-              onPress={navCreateLots}
-            /> */}
-            <ActionCard
-              label="All Species"
-              iconSource={require('../../assets/images/fishIcon.png')}
-              onPress={navAllLots}
-            />
-          </ScrollView>
+        {/* Profile Card */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('fisherman.yourProfile')}</Text>
+
+          <Row icon="person" label={t('fisherman.fullName')} value={name} />
+          <Row icon="mail" label={t('fisherman.emailAddress')} value={user?.email || '—'} />
+          <Row icon="phone" label={t('fisherman.phoneNumber')} value={user?.phone || '—'} />
+
+          <View style={[styles.row, { marginTop: 8 }]}>
+            <Icon name="verified" size={18} color={PALETTE.green700} style={{ marginRight: 10 }} />
+            <Text style={styles.rowLabel}>{t('fisherman.accountStatus')}</Text>
+            <View style={{ flex: 1 }} />
+            <StatusPill text={t('fisherman.active')} tone="ok" />
+          </View>
+
+          <View style={styles.divider} />
+
+          <Row icon="waves" label={t('fisherman.fishingZone')} value={user?.fishing_zone || t('fisherman.notSpecified')} />
+          <Row icon="location-on" label={t('fisherman.portLocation')} value={user?.port_location || t('fisherman.notSpecified')} />
+          <Row icon="directions-boat" label={t('fisherman.boatRegistration')} value={user?.boat_registration_number || t('fisherman.notRegistered')} />
         </View>
-      </View>
+
+        {/* Trips Overview */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('fisherman.tripsOverview')}</Text>
+            <Pressable onPress={goAllTrips} style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}>
+              <Icon name="list" size={18} color={PALETTE.info} />
+              <Text style={{ color: PALETTE.info, marginLeft: 6, fontWeight: '600' }}>{t('common.view')} {t('common.all')}</Text>
+            </Pressable>
+          </View>
+
+            {loading ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={PALETTE.green700} />
+              <Text style={{ color: PALETTE.text600, marginTop: 8 }}>{t('fisherman.loadingStats')}</Text>
+            </View>
+          ) : errText ? (
+            <View style={{ paddingVertical: 8 }}>
+              <Text style={{ color: PALETTE.warn }}>{errText}</Text>
+            </View>
+          ) : (
+            <View style={styles.statGrid}>
+              <StatCard icon="inbox" label={t('fisherman.allTrips')} value={totalTrips} onPress={goAllTrips} />
+              <StatCard icon="navigation" label={t('fisherman.activeTrips')} value={activeTrips} onPress={goAllTrips} tone="info" />
+              <StatCard icon="add-location-alt" label={t('fisherman.newTrip')} value="+" onPress={goNewTrip} tone="ok" />
+                    </View>
+          )}
+        </View>
+
+        {/* Species Overview */}
+        {/* <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('fisherman.species')}</Text>
+            <Pressable onPress={goLotsList} style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}>
+              <Icon name="list" size={18} color={PALETTE.info} />
+              <Text style={{ color: PALETTE.info, marginLeft: 6, fontWeight: '600' }}>{t('common.view')} {t('common.all')}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.statGrid}>
+            <StatCard icon="set-meal" label={t('fisherman.allSpecies')} value={totalLots} onPress={goLotsList} />
+          </View>
+        </View> */}
+
+        {/* Boats Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('fisherman.boats')}</Text>
+          <Text style={styles.subtle}>{t('fisherman.boatsDescription')}</Text>
+
+          <View style={styles.actionGrid}>
+            <ActionTile
+              icon="directions-boat"
+              title={t('fisherman.allBoats')}
+              subtitle={t('fisherman.viewRegisteredBoats')}
+              onPress={goBoatsList}
+            />
+            <ActionTile
+              icon="add-circle"
+              title={t('fisherman.registerBoat')}
+              subtitle={t('fisherman.addNewVessel')}
+              onPress={goBoatRegister}
+            />
+                  </View>
+              </View>
+
+        {/* Activities Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('fisherman.fishingActivities')}</Text>
+          <Text style={styles.subtle}>{t('fisherman.activitiesDescription')}</Text>
+
+          <View style={styles.actionGrid}>
+            <ActionTile
+              icon="surfing"
+              title={t('fisherman.allActivities')}
+              subtitle={t('fisherman.viewFishingActivities')}
+              onPress={goFishingActivities}
+            />
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('fisherman.quickActions')}</Text>
+
+          <View style={styles.actionGrid}>
+            <ActionTile
+              icon="cloud-off"
+              title={t('fisherman.offlineTrips')}
+              subtitle={t('fisherman.viewOfflineData')}
+              onPress={goOfflineTrips}
+            />
+            <ActionTile
+              icon="room-service"
+              title={t('fisherman.allTrips')}
+              subtitle={t('fisherman.browseAllTrips')}
+              onPress={goAllTrips}
+            />
+            <ActionTile
+              icon="add-location-alt"
+              title={t('fisherman.newTrip')}
+              subtitle={t('fisherman.startNewTrip')}
+              onPress={goNewTrip}
+            />
+            <ActionTile
+              icon="edit"
+              title={t('fisherman.editProfile')}
+              subtitle={t('fisherman.updateInformation')}
+              onPress={goProfile}
+            />
+          </View>
+        </View>
+
+        {/* Logout (secondary) */}
+      {/* <Pressable
+          onPress={confirmLogout}
+          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
+        >
+          <Icon name="logout" size={18} color="#fff" />
+          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
+      </Pressable> */}
+
+        {/* Footer space */}
+        <View style={{ height: 16 }} />
+      </ScrollView>
+          </View>
+      {isLoggingOut && (
+        <View style={styles.overlay}>
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={PALETTE.green700} />
+            <Text style={{ marginTop: 10, color: PALETTE.text600, fontWeight: '700' }}>Signing you out…</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
-};
+}
 
+/* -------------------- tiny UI atoms -------------------- */
+function Row({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <View style={styles.row}>
+      <Icon name={icon} size={18} color={PALETTE.text600} style={{ marginRight: 10 }} />
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={{ flex: 1 }} />
+      <Text style={styles.rowValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function StatusPill({ text, tone = 'ok' }: { text: string; tone?: 'ok' | 'warn' | 'error' | 'info' }) {
+  const colors = {
+    ok: { bg: '#E8F5E9', fg: PALETTE.green700 },
+    warn: { bg: '#FFF4E5', fg: PALETTE.warn },
+    error: { bg: '#FFEBEE', fg: PALETTE.error },
+    info: { bg: '#E3F2FD', fg: PALETTE.info },
+  }[tone];
+  return (
+    <View style={{ backgroundColor: colors.bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+      <Text style={{ color: colors.fg, fontWeight: '700' }}>{text}</Text>
+    </View>
+  );
+}
+
+function Chip({ icon, label, tone = 'default' }: { icon?: string; label: string; tone?: 'ok'|'warn'|'error'|'info'|'default' }) {
+  const bg =
+    tone === 'ok' ? '#E8F5E9' :
+    tone === 'warn' ? '#FFF4E5' :
+    tone === 'error' ? '#FFEBEE' :
+    tone === 'info' ? '#E3F2FD' : '#F1F5F9';
+  const color =
+    tone === 'ok' ? PALETTE.green700 :
+    tone === 'warn' ? PALETTE.warn :
+    tone === 'error' ? PALETTE.error :
+    tone === 'info' ? PALETTE.info : PALETTE.text700;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
+      {icon ? <Icon name={icon} size={14} color={color} style={{ marginRight: 6 }} /> : null}
+      <Text style={{ color, fontSize: 12 }}>{label}</Text>
+    </View>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  onPress,
+  tone = 'default',
+}: {
+  icon: string;
+  label: string;
+  value: number | string;
+  onPress?: () => void;
+  tone?: 'default' | 'ok' | 'warn' | 'error' | 'info';
+}) {
+  const toneBg = {
+    default: PALETTE.surface,
+    ok: '#F0FDF4',
+    warn: '#FFF7ED',
+    error: '#FEF2F2',
+    info: '#EFF6FF',
+  }[tone];
+  const toneIcon = {
+    default: PALETTE.text600,
+    ok: PALETTE.green700,
+    warn: PALETTE.warn,
+    error: PALETTE.error,
+    info: PALETTE.info,
+  }[tone];
+
+  return (
+            <Pressable
+      onPress={onPress}
+              style={({ pressed }) => [
+        styles.statCard,
+        { backgroundColor: toneBg, borderColor: PALETTE.border },
+        pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] },
+      ]}
+    >
+      <Icon name={icon} size={20} color={toneIcon} />
+      <Text style={{ color: PALETTE.text700, marginTop: 6 }}>{label}</Text>
+      <Text style={{ color: PALETTE.text900, fontWeight: '800', fontSize: 18, marginTop: 2 }}>
+        {value}
+      </Text>
+            </Pressable>
+  );
+}
+
+function ActionTile({
+  icon,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress?: () => void;
+}) {
+  const rtl = isRTL();
+  return (
+            <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] }]}
+    >
+      <View style={[styles.tileIcon, rtl && { marginLeft: 12, marginRight: 0 }]}>
+        <Icon name={icon} size={20} color="#fff" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: PALETTE.text900, fontWeight: '700', textAlign: getTextAlign() }}>{title}</Text>
+        <Text style={{ color: PALETTE.text600, marginTop: 2, textAlign: getTextAlign() }}>{subtitle}</Text>
+      </View>
+      <Icon name={rtl ? "chevron-left" : "chevron-right"} size={22} color={PALETTE.text600} />
+            </Pressable>
+  );
+}
+
+/* -------------------- styles -------------------- */
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: PALETTE.surface },
-  screen: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 12,
-    backgroundColor: PALETTE.surface,
-  },
-
-  // Header / profile
-  headerCard: {
-    backgroundColor: PALETTE.green700,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    padding: 14,
+  appbar: {
+    backgroundColor: APPBAR_BG,
+    paddingTop: 0,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    paddingHorizontal: 10,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  headerCardCompact: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 10,
+  appbarSide: { width: 40, height: 40 },
+  appbarTitle: { color: '#fff', fontSize: 18, fontWeight: '700', flex: 1, textAlign: 'center' },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  headerLeftCompact: { alignItems: 'flex-start' },
-
-  avatar: { height: 56, width: 56, borderRadius: 28 },
-  avatarSm: { height: 44, width: 44, borderRadius: 22 },
-
-  eyebrow: {
-    color: 'white',
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
   },
-  title: {
-    color: PALETTE.surface,
-    fontWeight: '800',
-    fontSize: 22,
-    marginTop: 2,
-  },
-  titleSm: { fontSize: 18, marginTop: 0 },
-
-  rolePill: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
+  refreshChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PALETTE.surface,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: PALETTE.border,
-    backgroundColor: PALETTE.green50,
   },
-  rolePillTight: { marginTop: 4, paddingHorizontal: 8, paddingVertical: 3 },
-  roleText: { color: PALETTE.green700, fontWeight: '700', fontSize: 12 },
-
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-
-  section: { marginTop: 26 },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: PALETTE.green700,
-    marginLeft: 5,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-
-  // Actions
-  actionsList: { gap: 12 },
-  actionCard: {
-    alignSelf: 'stretch',
+  card: {
     backgroundColor: PALETTE.surface,
-    borderRadius: 16,
-    paddingHorizontal: 22,
-    marginHorizontal: 10,
-    paddingVertical: 22,
-    alignItems: 'center',
+    marginHorizontal: 14,
+    marginTop: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: PALETTE.border,
+    padding: 14,
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  actionIcon: { width: 40, height: 40, marginBottom: 8, resizeMode: 'contain' },
-  actionLabel: {
-    fontSize: 16,
-    color: PALETTE.green700,
-    fontWeight: '800',
-    textAlign: 'center',
+  h1: { color: PALETTE.text900, fontSize: 20, fontWeight: '800' },
+  subtle: { color: PALETTE.text600, marginTop: 4 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  sectionTitle: { color: PALETTE.text900, fontSize: 16, fontWeight: '800', flex: 1 },
+  linkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
   },
-
-  // Logout buttons
-  headerLogoutBtn: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  rowLabel: { color: PALETTE.text600 },
+  rowValue: { color: PALETTE.text900, fontWeight: '700', maxWidth: '60%' },
+  divider: { height: 1, backgroundColor: PALETTE.border, marginVertical: 10 },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 10,
   },
-  headerLogoutText: { color: '#FFFFFF', fontWeight: '800' },
-
-  logoutBtn: {
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+  statCard: {
+    width: '30%',
+    minWidth: 110,
+    flexGrow: 1,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FEE2E2',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
   },
-  logoutText: { color: '#B91C1C', fontWeight: '800', textAlign: 'center' },
+  actionGrid: { marginTop: 10 },
+  tile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    backgroundColor: PALETTE.surface,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  tileIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: PALETTE.green700,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  logoutBtn: {
+    marginHorizontal: 14, marginTop: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: PALETTE.error,
+  },
+  avatar: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: PALETTE.green700,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
+  },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center',
+  },
+  overlayCard: {
+    backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16,
+    borderRadius: 12, borderWidth: 1, borderColor: PALETTE.border, alignItems: 'center',
+  },
 });
-
-export default FishermanHome;

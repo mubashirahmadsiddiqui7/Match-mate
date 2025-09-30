@@ -12,9 +12,11 @@ import {
   Platform,
   useWindowDimensions,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Dropdown } from 'react-native-element-dropdown';
+import Toast from 'react-native-toast-message';
 
 /* ---- design tokens ---- */
 const PRIMARY = '#1f720d';
@@ -239,6 +241,27 @@ export function CompleteTripModal({
       return { ...prev, rows };
     });
   }
+
+  // Function to extract weight from lot selection and auto-fill quantity
+  function handleLotSelection(i: number, lotNo: string) {
+    // Find the selected lot from availableLots
+    const selectedLot = availableLots.find(lot => lot.lot_no === lotNo);
+    
+    if (selectedLot && selectedLot.quantity_kg) {
+      // Extract the weight and auto-fill the quantity field
+      const weight = typeof selectedLot.quantity_kg === 'string' 
+        ? selectedLot.quantity_kg 
+        : String(selectedLot.quantity_kg);
+      
+      updateRow(i, { 
+        lot_no: lotNo, 
+        quantity_kg: weight 
+      });
+    } else {
+      // If no weight found, just update the lot_no
+      updateRow(i, { lot_no: lotNo });
+    }
+  }
   function addRow() {
     setForm(prev => ({
       ...prev,
@@ -276,6 +299,48 @@ export function CompleteTripModal({
 
   const overAssign = totalAvailableKg > 0 && assignedKg > totalAvailableKg;
 
+  // Per-lot availability and assignment tracking
+  const lotAvailabilityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (availableLots || []).forEach(l => {
+      const v = typeof l.quantity_kg === 'string' ? parseFloat(l.quantity_kg) : Number(l.quantity_kg);
+      map.set(l.lot_no, Number.isFinite(v) ? v : 0);
+    });
+    return map;
+  }, [availableLots]);
+
+  const lotAssignedMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (form.rows || []).forEach(r => {
+      const lot = r.lot_no?.trim();
+      if (!lot) return;
+      const n = Number(r.quantity_kg);
+      const prev = map.get(lot) ?? 0;
+      map.set(lot, prev + (Number.isFinite(n) ? n : 0));
+    });
+    return map;
+  }, [form.rows]);
+
+  function nearlyEqual(a: number, b: number, eps = 0.01) {
+    return Math.abs(a - b) <= eps;
+  }
+
+  const anyLotOverAssigned = useMemo(() => {
+    for (const [lot, assigned] of lotAssignedMap) {
+      const avail = lotAvailabilityMap.get(lot) ?? 0;
+      if (assigned - avail > 0.0001) return true;
+    }
+    return false;
+  }, [lotAssignedMap, lotAvailabilityMap]);
+
+  const allLotsFullyDistributed = useMemo(() => {
+    for (const [lot, avail] of lotAvailabilityMap) {
+      const assigned = lotAssignedMap.get(lot) ?? 0;
+      if (!nearlyEqual(assigned, avail)) return false;
+    }
+    return (availableLots || []).length > 0;
+  }, [lotAvailabilityMap, lotAssignedMap, availableLots]);
+
   const validRows = useMemo(
     () =>
       form.rows.filter(
@@ -293,10 +358,32 @@ export function CompleteTripModal({
     form.landing_site.trim().length > 0 &&
     validRows.length > 0 &&
     !loading &&
-    !overAssign;
+    !overAssign &&
+    !anyLotOverAssigned &&
+    allLotsFullyDistributed;
 
   function handleSubmit() {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      // Build helpful error
+      const unmetLots: string[] = [];
+      for (const [lot, avail] of lotAvailabilityMap) {
+        const assigned = lotAssignedMap.get(lot) ?? 0;
+        if (!nearlyEqual(assigned, avail)) {
+          const remaining = Math.max(avail - assigned, 0);
+          unmetLots.push(`${lot} (${remaining.toFixed(2)} kg remaining)`);
+        }
+      }
+      let text2 = 'Please fix the highlighted issues and try again.';
+      if (anyLotOverAssigned) {
+        text2 = 'Assigned quantity exceeds available for one or more lots.';
+      } else if (unmetLots.length) {
+        text2 = `Distribute all lots fully. Pending: ${unmetLots.join(', ')}`;
+      } else if (overAssign) {
+        text2 = 'Total assigned kg exceeds total available.';
+      }
+      Toast.show({ type: 'error', text1: 'Cannot complete trip', text2, position: 'top' });
+      return;
+    }
 
     const payload: CompleteTripPayload = {
       landing_site: form.landing_site.trim(), // label text as requested
@@ -334,17 +421,19 @@ export function CompleteTripModal({
             <View style={styles.headerIconWrap}>
               <MaterialIcons name="checklist" size={18} color="#fff" />
             </View>
-            <Text
-              style={[styles.title, styles.textWrap]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {tripCode ? `#${tripCode}` : 'Complete Trip'}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[styles.title, styles.textWrap]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {tripCode ? `#${tripCode}` : 'Complete Trip'}
+              </Text>
+              <Text style={[styles.sub, styles.textWrap]}>
+                Distribute fish lots to middle men and confirm the landing site.
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.sub, styles.textWrap]}>
-            Distribute fish lots to middle men and confirm the landing site.
-          </Text>
 
           {/* Summary bar */}
           <View
@@ -357,23 +446,32 @@ export function CompleteTripModal({
             ]}
           >
             <MaterialIcons
-              name={overAssign ? 'warning-amber' : 'info'}
+              name={overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? 'warning-amber' : 'info'}
               size={16}
-              color={overAssign ? DANGER : INFO}
+              color={overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? DANGER : INFO}
             />
             <Text
               style={[
                 styles.summaryText,
                 styles.textWrap,
-                { color: overAssign ? DANGER : INFO },
+                { color: overAssign || anyLotOverAssigned || !allLotsFullyDistributed ? DANGER : INFO },
               ]}
             >
-              Assigned:{' '}
-              <Text style={styles.bold}>{assignedKg.toFixed(2)} KG</Text>
-              {totalAvailableKg > 0
-                ? `  •  Available: ${totalAvailableKg.toFixed(2)} KG`
-                : ''}
-              {overAssign ? '  — Reduce assigned KG to proceed' : ''}
+              <Text style={styles.summaryStrong}>Assigned:</Text> <Text style={styles.bold}>{assignedKg.toFixed(2)} KG</Text>
+              {totalAvailableKg > 0 && (
+                <Text>
+                  {'  '}•{'  '}<Text style={styles.summaryStrong}>Available:</Text> {totalAvailableKg.toFixed(2)} KG
+                </Text>
+              )}
+              {!!overAssign && (
+                <Text>  — Reduce total assigned KG to proceed</Text>
+              )}
+              {!!anyLotOverAssigned && !overAssign && (
+                <Text>  — A lot exceeds its available KG</Text>
+              )}
+              {!!(!allLotsFullyDistributed && !overAssign && !anyLotOverAssigned) && (
+                <Text>  — Distribute all lots fully to proceed</Text>
+              )}
             </Text>
           </View>
 
@@ -392,7 +490,7 @@ export function CompleteTripModal({
                 <View key={i} style={styles.rowCard}>
                   <View style={[styles.grid, wide && { columnGap: 12 }]}>
                     {/* Lot Number (Dropdown) */}
-                    <FormField label="Lot Number *" flex>
+              <FormField label="Lot Number" required flex>
                       <Dropdown
                         data={lotOptions}
                         labelField="label"
@@ -402,7 +500,7 @@ export function CompleteTripModal({
                         search
                         searchPlaceholder="Search lot..."
                         onChange={item =>
-                          updateRow(i, { lot_no: String(item.value) })
+                          handleLotSelection(i, String(item.value))
                         }
                         style={styles.dd}
                         placeholderStyle={styles.ddPlaceholder}
@@ -414,7 +512,7 @@ export function CompleteTripModal({
                     </FormField>
 
                     {/* Middle Man (Dropdown) */}
-                    <FormField label="Middle Man *" flex>
+              <FormField label="Middle Man" required flex>
                       <Dropdown
                         data={middleOptions}
                         labelField="label"
@@ -436,7 +534,7 @@ export function CompleteTripModal({
                     </FormField>
 
                     {/* Quantity */}
-                    <FormField label="Quantity (KG) *" flex>
+              <FormField label="Quantity (KG)" required flex>
                       <TextInput
                         placeholder="e.g., 365"
                         keyboardType="decimal-pad"
@@ -474,41 +572,40 @@ export function CompleteTripModal({
               );
             })}
 
-            {/* Landing site (Dropdown) + notes */}
-            <View style={[styles.grid, wide && { columnGap: 12 }]}>
-              <FormField label="Landing Site *" flex>
-                <Dropdown
-                  data={landingOptions}
-                  labelField="label"
-                  valueField="value"
-                  value={form.landing_site || null}
-                  placeholder="Select landing site"
-                  onChange={item =>
-                    setForm(prev => ({
-                      ...prev,
-                      landing_site: String(item.value),
-                    }))
-                  }
-                  style={styles.dd}
-                  placeholderStyle={styles.ddPlaceholder}
-                  selectedTextStyle={styles.ddSelected}
-                  itemTextStyle={styles.ddItemText}
-                  itemContainerStyle={styles.ddItemContainer}
-                />
-              </FormField>
+            {/* Landing site (Dropdown) */}
+            <FormField label="Landing Site" required>
+              <Dropdown
+                data={landingOptions}
+                labelField="label"
+                valueField="value"
+                value={form.landing_site || null}
+                placeholder="Select landing site"
+                onChange={item =>
+                  setForm(prev => ({
+                    ...prev,
+                    landing_site: String(item.value),
+                  }))
+                }
+                style={styles.dd}
+                placeholderStyle={styles.ddPlaceholder}
+                selectedTextStyle={styles.ddSelected}
+                itemTextStyle={styles.ddItemText}
+                itemContainerStyle={styles.ddItemContainer}
+              />
+            </FormField>
 
-              <FormField label="Landing Notes" flex>
-                <TextInput
-                  placeholder="e.g., Trip completed successfully"
-                  value={form.landing_notes}
-                  onChangeText={v =>
-                    setForm(prev => ({ ...prev, landing_notes: v }))
-                  }
-                  style={styles.input}
-                  placeholderTextColor={MUTED}
-                />
-              </FormField>
-            </View>
+            {/* Landing Notes */}
+            <FormField label="Landing Notes">
+              <TextInput
+                placeholder="e.g., Trip completed successfully"
+                value={form.landing_notes}
+                onChangeText={v =>
+                  setForm(prev => ({ ...prev, landing_notes: v }))
+                }
+                style={styles.input}
+                placeholderTextColor={MUTED}
+              />
+            </FormField>
 
             {/* Available lots helper */}
             {!!availableLots?.length && (
@@ -557,36 +654,49 @@ export function CompleteTripModal({
 
             {/* Add distribution */}
             <View style={{ marginTop: 4 }}>
-              <Text style={{ color: INFO, fontWeight: '800', marginBottom: 8 }}>
-                Lot Distribution
-              </Text>
+              <Text style={{ color: INFO, fontWeight: '800', marginBottom: 8 }}>Lot Distribution</Text>
               <Pressable onPress={addRow} style={styles.addBtn}>
                 <MaterialIcons name="add" size={18} color={PRIMARY} />
-                <Text style={{ color: 'black' }}>Add Distribution</Text>
+                <Text style={{ color: TEXT, fontWeight: '700' }}>Add Distribution</Text>
               </Pressable>
             </View>
           </ScrollView>
 
           <View style={styles.row}>
             {/* Cancel Button */}
-            <TouchableOpacity
-              style={[styles.button, styles.cancelBtn]}
-              onPress={onClose}
-            >
-              <MaterialIcons name="cancel" size={20} color="#DC2626" />
-              <Text style={[styles.btnText, { color: '#DC2626' }]}>Cancel</Text>
+            <TouchableOpacity style={[styles.button, styles.cancelBtn]} onPress={onClose}>
+              <MaterialIcons name="cancel" size={20} color={TEXT} />
+              <Text style={[styles.btnText, { color: TEXT }]}>Cancel</Text>
             </TouchableOpacity>
 
             {/* Complete Button */}
             <TouchableOpacity
-              style={[styles.button, styles.completeBtn]}
+              style={[
+                styles.button,
+                (loading || !canSubmit) ? styles.completeBtnDisabled : styles.completeBtn,
+              ]}
               onPress={handleSubmit}
               disabled={!canSubmit || loading}
             >
-              <MaterialIcons name="check-circle" size={20} color="#059669" />
-              <Text style={[styles.btnText, { color: '#059669' }]}>
-                Complete Trip
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons
+                    name="check-circle"
+                    size={20}
+                    color={(loading || !canSubmit) ? '#9CA3AF' : '#fff'}
+                  />
+                  <Text
+                    style={[
+                      styles.btnText,
+                      { color: (loading || !canSubmit) ? '#9CA3AF' : '#fff' },
+                    ]}
+                  >
+                    Complete Trip
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -660,8 +770,12 @@ const styles = StyleSheet.create({
     borderColor: '#DC2626',
   },
   completeBtn: {
-    borderWidth: 1,
-    borderColor: '#059669',
+    backgroundColor: '#059669',
+    borderWidth: 0,
+  },
+  completeBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+    borderWidth: 0,
   },
   btnText: {
     marginLeft: 6,
@@ -771,7 +885,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  summaryText: { fontWeight: '700', minWidth: 0 },
+  summaryText: { fontWeight: '700', minWidth: 0, flexShrink: 1, flex: 1 },
+  summaryStrong: { fontWeight: '900' },
   bold: { fontWeight: '900' },
 
   /* add row */

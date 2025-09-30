@@ -690,7 +690,7 @@ export async function getTripCounts(): Promise<{ totals: { all: number; pending:
   const reqs = [api('/trips', { query: { page: 1, per_page: 1 } }), ...statuses.map(status => api('/trips', { query: { status, page: 1, per_page: 1 } }))];
   const settled = await Promise.allSettled(reqs);
 
-  const totals = { all: 0, pending: 0,pending_approval:0, approved: 0, active: 0, completed: 0, cancelled: 0 };
+  const totals = { all: 0, pending: 0, pending_approval: 0, approved: 0, active: 0, completed: 0, cancelled: 0 };
   const errors: Partial<Record<'all' | TripStatus, string>> = {};
 
   const allRes = settled[0];
@@ -702,6 +702,9 @@ export async function getTripCounts(): Promise<{ totals: { all: number; pending:
     if (res.status === 'fulfilled') totals[status] = readTotal(res.value);
     else { totals[status] = 0; errors[status] = (res as any).reason?.message || 'Failed'; }
   });
+
+  // Map pending_approval to pending for FCS dashboard display
+  totals.pending = totals.pending + totals.pending_approval;
 
   return { totals, errors };
 }
@@ -716,6 +719,13 @@ export type TripRowDTO = {
   departure_port?: string | null;
   destination_port?: string | null;
   departure_time?: string | null;
+  // additional optional info for richer mobile card rows
+  fisherman_name?: string | null;
+  boat_name?: string | null;
+  boat_registration_number?: string | null;
+  trip_type_label?: string | null;
+  created_at?: string | null; // display friendly
+  fishing_activity_count?: number | null;
 };
 export async function listTripsPage(params?: { page?: number; per_page?: number; }) {
   const page = params?.page ?? 1;
@@ -730,6 +740,12 @@ export async function listTripsPage(params?: { page?: number; per_page?: number;
     departure_port: t.departure_port ?? t.port_location ?? null,
     destination_port: t.destination_port ?? null,
     departure_time: toDisplay12h(t.departure_time),
+    fisherman_name: t.fisherman?.name ?? t.user?.name ?? null,
+    boat_name: t.boat_name ?? null,
+    boat_registration_number: t.boat_registration_number ?? null,
+    trip_type_label: t.trip_type_label ?? t.trip_type ?? null,
+    created_at: toDisplay12h(t.created_at),
+    fishing_activity_count: typeof t.fishing_activity_count === 'number' ? t.fishing_activity_count : (Array.isArray(t.fishing_activities) ? t.fishing_activities.length : null),
   }));
 
   const total = Number(json?.data?.total ?? rows.length);

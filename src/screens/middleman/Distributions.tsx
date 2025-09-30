@@ -1,466 +1,724 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+  StatusBar,
+  Pressable,
 } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MiddleManStackParamList } from '../../app/navigation/stacks/MiddleManStack';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import PALETTE from '../../theme/palette';
+import {
+  fetchDistributions,
+  type FishLotDistribution,
+  type PaginatedResponse,
+  getStatusColor,
+  getStatusText,
+  formatDate,
+} from '../../services/middlemanDistribution';
 
-type Nav = NativeStackNavigationProp<MiddleManStackParamList, 'MiddleManHome'>;
 
-const Trip = [
-  { label: 'All Trips', value: 'All Trips' },
-  { label: 'Dummy Trip 1', value: 'Dummy Trip 1' },
-];
+type Nav = NativeStackNavigationProp<MiddleManStackParamList>;
 
 const Status = [
   { label: 'All Status', value: 'All Status' },
-  { label: 'Pending', value: 'Pending' },
-  { label: 'Verified', value: 'Verified' },
-  { label: 'Rejected', value: 'Rejected' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Verified', value: 'verified' },
+  { label: 'Rejected', value: 'rejected' },
 ];
 
 const MiddleMen = [
   { label: 'All Middle Men', value: 'All Middle Men' },
-  { label: 'Middle Man 1', value: 'Middle Man 1' },
+  { label: 'Hamza Middleman', value: 'Hamza Middleman' },
 ];
 
-// const dummyDistribution = [
-//   {
-//     id: '1',
-//     name: 'DIST-1',
-//     status: 'Pending',
-//     trip: 'Trip11',
-//     fisherman: 'Ali',
-//     weight: 50,
-//     date: '20/August/2025',
-//   },
-//   {
-//     id: '2',
-//     name: 'DIST-2',
-//     status: 'Verified',
-//     trip: 'Trip12',
-//     fisherman: 'Faraz',
-//     weight: 150,
-//     date: '22/August/2025',
-//   },
-//   {
-//     id: '3',
-//     name: 'DIST-3',
-//     status: 'Rejected',
-//     trip: 'Trip13',
-//     fisherman: 'John',
-//     weight: 30,
-//     date: '19/August/2025',
-//   },
-//   {
-//     id: '4',
-//     name: 'DIST-4',
-//     status: 'Verified',
-//     trip: 'Trip14',
-//     fisherman: 'Doe',
-//     weight: 25,
-//     date: '01/August/2025',
-//   },
-//   {
-//     id: '5',
-//     name: 'DIST-5',
-//     status: 'Verified',
-//     trip: 'Trip15',
-//     fisherman: 'Behroz',
-//     weight: 76,
-//     date: '21/August/2025',
-//   },
-//   {
-//     id: '6',
-//     name: 'DIST-6',
-//     status: 'Pending',
-//     trip: 'Trip16',
-//     fisherman: 'Khan',
-//     weight: 265,
-//     date: '29/August/2025',
-//   },
-//   {
-//     id: '7',
-//     name: 'DIST-7',
-//     status: 'Rejected',
-//     trip: 'Trip17',
-//     fisherman: 'Niazi',
-//     weight: 65,
-//     date: '18/August/2025',
-//   },
-//   {
-//     id: '8',
-//     name: 'DIST-8',
-//     status: 'Verified',
-//     trip: 'Trip18',
-//     fisherman: 'Sher',
-//     weight: 29,
-//     date: '11/August/2025',
-//   },
-// ];
-
 export default function Distributions() {
-  const [products, setProducts] = useState([]);
-  useEffect(() => {
-    getProducts();
-  }, []);
-
-  const getProducts = () => {
-    const URL = 'https://fakestoreapi.com/products';
-    fetch(URL)
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
-        setProducts(data);
-      });
-  };
+  const [allDistributions, setAllDistributions] = useState<FishLotDistribution[]>([]);
+  const [, setDistributions] = useState<FishLotDistribution[]>([]);
+  const [meta, setMeta] = useState<PaginatedResponse<FishLotDistribution>['meta'] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
   const navigation = useNavigation<Nav>();
 
-  const [trip, setTrip] = useState(null);
-  const [status, setStatus] = useState(null);
-  const [middleMan, setMiddleMan] = useState(null);
+  // Filter states
+  const [status, setStatus] = useState('All Status');
+  const [middleMan, setMiddleMan] = useState('All Middle Men');
 
-  const [date, setDate] = useState(new Date());
-  const [dateTo, setDateTo] = useState(new Date());
+  // Dynamic dropdown data
+  const [middlemanOptions, setMiddlemanOptions] = useState(MiddleMen);
 
-  const [showPicker, setShowPicker] = useState(false);
-  const [showPickerTo, setShowPickerTo] = useState(false);
+  // Function to apply filters locally
+  const applyFilters = useCallback(() => {
+    let filteredData = [...allDistributions];
 
-  const onChangeDate = (event, selectedDate) => {
-    setShowPicker(false);
-    if (selectedDate) {
-      setDate(selectedDate);
+    // Apply status filter
+    if (status && status !== 'All Status') {
+      filteredData = filteredData.filter(dist => dist.verification_status === status);
     }
-  };
-  const onChangeDateTo = (eventTo, selectedDateTo) => {
-    setShowPickerTo(false);
-    if (selectedDateTo) {
-      setDateTo(selectedDateTo);
-    }
-  };
 
-  const renderItem = ({ item }) => {
-    const statusColor =
-      item.status === 'Verified'
-        ? '#d3be00ff'
-        : item.status === 'Pending'
-        ? '#ff9800'
-        : '#e31305ff';
+    // Apply middleman filter
+    if (middleMan && middleMan !== 'All Middle Men') {
+      filteredData = filteredData.filter(dist => dist.middle_man?.name === middleMan);
+    }
+
+    console.log('🔍 Filtering results:', {
+      total: allDistributions.length,
+      filtered: filteredData.length,
+      status,
+      middleMan
+    });
+
+    setDistributions(filteredData);
+  }, [allDistributions, status, middleMan]);
+
+  // Function to populate dropdown options from API data
+  const populateDropdownOptions = useCallback((distributions: FishLotDistribution[]) => {
+    // Extract unique middlemen
+    const uniqueMiddlemen = new Set<string>();
+    
+    distributions.forEach(dist => {
+      // Add middleman name
+      if (dist.middle_man?.name) {
+        uniqueMiddlemen.add(dist.middle_man.name);
+      }
+    });
+
+    // Update middleman options
+    const middlemanOptionsData = [
+      { label: 'All Middle Men', value: 'All Middle Men' },
+      ...Array.from(uniqueMiddlemen).map(name => ({ label: name, value: name }))
+    ];
+    setMiddlemanOptions(middlemanOptionsData);
+  }, []);
+
+  const loadDistributions = useCallback(async (p = 1, replace = false) => {
+    if (p === 1 && !replace) setLoading(true);
+    try {
+      const params: any = {
+        page: p,
+        per_page: 15,
+      };
+
+      console.log('📡 Loading distributions...');
+
+      const response = await fetchDistributions(params);
+      console.log('📦 API Response items count:', response.items.length);
+      
+      setMeta(response.meta);
+      setPage(response.meta.current_page);
+      
+      // Store all distributions for filtering
+      if (p === 1) {
+        setAllDistributions(response.items);
+        setDistributions(response.items);
+        // Populate dropdown options on first load
+        populateDropdownOptions(response.items);
+      } else {
+        setAllDistributions(prev => [...prev, ...response.items]);
+        setDistributions(prev => [...prev, ...response.items]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading distributions:', error);
+      Alert.alert('Error', 'Failed to load distributions. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [populateDropdownOptions]);
+
+  // Apply filters whenever filter states change
+  useEffect(() => {
+    if (allDistributions.length > 0) {
+      applyFilters();
+    }
+  }, [applyFilters, allDistributions.length]);
+
+  useEffect(() => {
+    loadDistributions(1, true);
+  }, [loadDistributions]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadDistributions(1, true);
+  }, [loadDistributions]);
+
+  const onEndReached = useCallback(() => {
+    if (!meta || page >= meta.last_page) return;
+    loadDistributions(page + 1);
+  }, [meta, page, loadDistributions]);
+
+
+
+  // --- Render List Item ---
+  const renderItem = ({ item }: { item: FishLotDistribution }) => {
+    const statusColor = getStatusColor(item.verification_status);
+    const statusText = item.verification_status_label || getStatusText(item.verification_status);
 
     return (
-      <TouchableOpacity
-        onPress={() => {
-          navigation.navigate('distributionDetails');
-        }}
+      <TouchableOpacity 
+        style={styles.distributionCard}
+        onPress={() => navigation.navigate('distributionDetails', { distributionId: item.id })}
+        activeOpacity={0.8}
       >
-        <View style={styles.itemContainer}>
-          <View style={styles.itemHeader}>
-           {/* <Text style={styles.itemTitle}>{item.name}</Text> */}
-           <Text style={styles.itemTitle}>{item.title}</Text>
-            <View
-              style={[styles.statusBadge, { backgroundColor: statusColor }]}
-            >
-              {/* <Text style={styles.statusBadgeText}>{item.status}</Text> */}
-              <Text style={styles.statusBadgeText}>{item.price}</Text>
-            </View>
-          </View>
-
-          <View style={styles.itemRow}>
-            <Text style={styles.itemLabel}>Trip:</Text>
-            {/* <Text style={styles.itemValue}>{item.trip}</Text> */}
-            <Text style={styles.itemValue}>{item.category}</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.itemLabel}>Fisherman:</Text>
-            {/* <Text style={styles.itemValue}>{item.fisherman}</Text> */}
-            <Text style={styles.itemValue}>{item.description}</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.itemLabel}>Weight:</Text>
-            <Text style={styles.itemValue}>{item.weight} kg</Text>
-          </View>
-          <View style={styles.itemRow}>
-            <Text style={styles.itemLabel}>Date:</Text>
-            <Text style={styles.itemValue}>{item.date}</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>DIST-{item.id}</Text>
+          <View style={[styles.statusTag, { backgroundColor: statusColor }]}>
+            <Text style={styles.statusTagText}>{statusText}</Text>
           </View>
         </View>
+
+        <View style={styles.cardContent}>
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Trip:</Text>
+              <Text style={styles.infoValue}>{item.trip?.trip_id || '—'}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Fisherman:</Text>
+              <Text style={styles.infoValue}>{item.trip?.fisherman?.name || '—'}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Middle Man:</Text>
+              <Text style={styles.infoValue}>{item.middle_man?.name || '—'}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Total Quantity:</Text>
+              <View style={styles.quantityTag}>
+                <Text style={styles.quantityTagText}>{item.total_quantity_kg} KG</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Created Date:</Text>
+              <Text style={styles.infoValue}>{formatDate(item.created_at)}</Text>
+            </View>
+
+            {item.verifier && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Verified By:</Text>
+                <Text style={styles.infoValue}>{item.verifier.name}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Show distributed lots summary */}
+          {item.processed_lots && item.processed_lots.length > 0 && (
+            <View style={styles.lotsSection}>
+              <Text style={styles.lotsHeader}>Distributed Lots:</Text>
+              {item.processed_lots.map((lot, index) => (
+                <View key={index} style={styles.lotRow}>
+                  <Text style={styles.lotText}>
+                    {lot.lot_no} - {lot.species_name || 'Unknown'}
+                  </Text>
+                  <View style={styles.quantityTag}>
+                    <Text style={styles.quantityTagText}>{lot.quantity_kg} KG</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* <TouchableOpacity style={styles.viewButton}>
+          <Text style={styles.viewButtonText}>View Details</Text>
+        </TouchableOpacity> */}
       </TouchableOpacity>
     );
   };
 
-  return (
-    <ScrollView style={styles.container}>
+  // --- Render Header (Filters) ---
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      
       {/* Filters */}
-      <View style={styles.cardFilter}>
-        <Text style={styles.headerText}>Filter Distributions</Text>
-        {/* Trip */}
-        <View style={styles.dropdownRow}>
-          <Text style={styles.label}>Trip</Text>
-          <Dropdown
-            style={styles.dropdown}
-            placeholderStyle={styles.dropdownPlaceholder}
-            selectedTextStyle={styles.dropdownText}
-            data={Trip}
-            search
-            maxHeight={200}
-            labelField="label"
-            valueField="value"
-            placeholder="Select Trip"
-            searchPlaceholder="Search..."
-            value={trip}
-            onChange={item => setTrip(item.value)}
-          />
+      <View style={styles.filterCard}>
+        <Text style={styles.filterTitle}>Filter Distributions</Text>
+
+        <View style={styles.filterSection}>
+                      {/* Status */}
+            <View style={styles.filterItem}>
+              <Text style={styles.filterLabel}>Status</Text>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.dropdownPlaceholder}
+                selectedTextStyle={styles.dropdownText}
+                data={Status}
+                labelField="label"
+                valueField="value"
+                placeholder="All Status"
+                value={status}
+                onChange={item => {
+                  setStatus(item.value);
+                  // Auto-apply filter when selection changes
+                  setTimeout(() => applyFilters(), 100);
+                }}
+              />
+            </View>
+
+            {/* Middle Man */}
+            <View style={styles.filterItem}>
+              <Text style={styles.filterLabel}>Middle Man</Text>
+              <Dropdown
+                style={styles.dropdown}
+                placeholderStyle={styles.dropdownPlaceholder}
+                selectedTextStyle={styles.dropdownText}
+                data={middlemanOptions}
+                labelField="label"
+                valueField="value"
+                placeholder="All Middle Men"
+                value={middleMan}
+                onChange={item => {
+                  setMiddleMan(item.value);
+                  // Auto-apply filter when selection changes
+                  setTimeout(() => applyFilters(), 100);
+                }}
+              />
+            </View>
         </View>
 
-        {/* Status */}
-        <View style={styles.dropdownRow}>
-          <Text style={styles.label}>Status</Text>
-          <Dropdown
-            style={styles.dropdown}
-            placeholderStyle={styles.dropdownPlaceholder}
-            selectedTextStyle={styles.dropdownText}
-            data={Status}
-            search
-            maxHeight={200}
-            labelField="label"
-            valueField="value"
-            placeholder="Select Status"
-            searchPlaceholder="Search..."
-            value={status}
-            onChange={item => setStatus(item.value)}
-          />
-        </View>
 
-        {/* Middle Man */}
-        <View style={styles.dropdownRow}>
-          <Text style={styles.label}>Middle Man</Text>
-          <Dropdown
-            style={styles.dropdown}
-            placeholderStyle={styles.dropdownPlaceholder}
-            selectedTextStyle={styles.dropdownText}
-            data={MiddleMen}
-            search
-            maxHeight={200}
-            labelField="label"
-            valueField="value"
-            placeholder="Select Middle Man"
-            searchPlaceholder="Search..."
-            value={middleMan}
-            onChange={item => setMiddleMan(item.value)}
-          />
-        </View>
 
-        {/* Date From */}
-        <View style={styles.dropdownRow}>
-          <Text style={styles.label}>Date From</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowPicker(true)}
-          >
-            <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-          {showPicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display="default"
-              onChange={onChangeDate}
-            />
-          )}
-        </View>
-
-        {/* Date To */}
-        <View style={styles.dropdownRow}>
-          <Text style={styles.label}>Date To</Text>
-          <TouchableOpacity
-            style={styles.dateButton}
-            onPress={() => setShowPickerTo(true)}
-          >
-            <Text style={styles.dateText}>{dateTo.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-          {showPickerTo && (
-            <DateTimePicker
-              value={dateTo}
-              mode="date"
-              display="default"
-              onChange={onChangeDateTo}
-            />
-          )}
-        </View>
+                {/* Filter Buttons */}
         <View style={styles.filterButtons}>
-          <TouchableOpacity style={styles.applyFilterButton}>
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>
-              🔍 Apply Filters
-            </Text>
+          <TouchableOpacity 
+            style={styles.applyButton}
+            onPress={() => applyFilters()}
+          >
+            <Text style={styles.applyButtonText}>Apply Filters</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.clearFilterButton}>
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>
-              ✖️ Clear Filters
-            </Text>
+          <TouchableOpacity 
+            style={styles.clearButton}
+            onPress={() => {
+              setStatus('All Status');
+              setMiddleMan('All Middle Men');
+              // Reset dropdown options to initial state
+              setMiddlemanOptions(MiddleMen);
+              // Reset to show all distributions
+              setDistributions(allDistributions);
+            }}
+          >
+            <Text style={styles.clearButtonText}>✖️ Clear</Text>
           </TouchableOpacity>
         </View>
       </View>
+    </View>
+  );
 
-      {/* Distributions List */}
-      <View style={styles.flatlistContainer}>
-        <Text style={styles.listHeader}>All Distributions</Text>
-        <FlatList
-          data={products}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        />
+  // --- Loader ---
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.8 }]}>
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Distributions</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={PALETTE.green700} />
+          <Text style={styles.loaderText}>Loading distributions...</Text>
+        </View>
       </View>
-    </ScrollView>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <StatusBar backgroundColor={PALETTE.green700} barStyle="light-content" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.8 }]}>
+          <Icon name="arrow-back" size={24} color="#fff" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Distributions</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <FlatList
+        data={allDistributions}
+        keyExtractor={item => item.id.toString()}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ItemSeparatorComponent={ItemSeparator}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.2}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={EmptyState}
+      />
+    </View>
   );
 }
 
+// --- Components ---
+const ItemSeparator = () => <View style={styles.itemSeparator} />;
+
+const EmptyState = () => (
+  <View style={styles.emptyContainer}>
+    <Text style={styles.emptyText}>No distributions found</Text>
+    <Text style={styles.emptySubText}>Try adjusting your filters</Text>
+  </View>
+);
+
+// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8fa',
+    backgroundColor: '#f8f9fa',
   },
-  cardFilter: {
-    backgroundColor: '#e5ede4ff',
-    padding: 20,
-    margin: 12,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerText: {
-    fontWeight: 'bold',
-    fontSize: 20,
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
-  },
-  dropdownRow: {
+  header: {
+    backgroundColor: PALETTE.green700,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
   },
-  label: {
-    width: '25%',
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderText: {
+    marginTop: 16,
     fontSize: 16,
-    color: '#444',
+    color: '#666',
+    fontWeight: '500',
+  },
+
+  // Header Container
+  headerContainer: {
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+
+  // Main Header
+  mainHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
+  },
+  newButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  newButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // Filter Card
+  filterCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  filterTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  filterSection: {
+    marginBottom: 16,
+  },
+  filterItem: {
+    marginBottom: 16,
+  },
+  filterLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
   dropdown: {
-    flex: 1,
-    height: 45,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
   },
   dropdownPlaceholder: {
-    color: '#999',
-    fontSize: 14,
+    color: '#9ca3af',
+    fontSize: 15,
   },
   dropdownText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 15,
+    color: '#1f2937',
+    fontWeight: '500',
   },
-  dateButton: {
-    flex: 1,
-    height: 45,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
+  dateInput: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dateText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 15,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  calendarIcon: {
+    fontSize: 18,
   },
   filterButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 8,
   },
-  applyFilterButton: {
-    backgroundColor: '#368a33ff',
-    padding: 10,
-    borderRadius: 20,
-  },
-  clearFilterButton: {
-    backgroundColor: '#828282ff',
-    padding: 10,
-    borderRadius: 20,
-  },
-  flatlistContainer: {
-    backgroundColor: '#fff',
-    padding: 15,
-    margin: 12,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
+  applyButton: {
+    backgroundColor: PALETTE.green700,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flex: 1,
+    marginRight: 8,
+    alignItems: 'center',
+    shadowColor: PALETTE.green700,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
     elevation: 2,
   },
-  listHeader: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#222',
+  applyButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
-  itemContainer: {
-    backgroundColor: '#e5ede4ff',
-    padding: 15,
+  clearButton: {
+    backgroundColor: '#6b7280',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'center',
+    shadowColor: '#6b7280',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  itemHeader: {
+  clearButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // Distribution Card
+  distributionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
+  },
+  statusTag: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statusTagText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  cardContent: {
+    marginBottom: 12,
+  },
+  infoSection: {
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 2,
+  },
+  infoLabel: {
+    fontSize: 15,
+    color: '#6b7280',
+    fontWeight: '600',
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 15,
+    color: '#1f2937',
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+  },
+  quantityTag: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+  },
+  quantityTagText: {
+    color: '#065f46',
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  lotsSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  lotsHeader: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 12,
+  },
+  lotRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+  },
+  lotText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+    flex: 1,
+  },
+  viewButton: {
+    backgroundColor: PALETTE.green700,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: PALETTE.green700,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  viewButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+
+  // Empty State
+  emptyContainer: {
+    padding: 60,
     alignItems: 'center',
   },
-  itemTitle: {
+  emptyText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusBadgeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 2,
-  },
-  itemLabel: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#555',
+    color: '#6b7280',
+    marginBottom: 8,
   },
-  itemValue: {
-    fontSize: 14,
-    color: '#333',
+  emptySubText: {
+    fontSize: 15,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  itemSeparator: {
+    height: 20,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
 });
+

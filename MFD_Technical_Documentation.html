@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>MFD_Technical_Documentation</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="/dev/fd/11" />
+</head>
+<body>
+<h1 id="mfd-trace-fish---technical-documentation">MFD Trace Fish -
+Technical Documentation</h1>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol type="1">
+<li><a href="#overview">Overview</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#features--modules">Features &amp; Modules</a></li>
+<li><a href="#user-roles--authentication">User Roles &amp;
+Authentication</a></li>
+<li><a href="#screens--ui-components">Screens &amp; UI
+Components</a></li>
+<li><a href="#offline-functionality">Offline Functionality</a></li>
+<li><a href="#api-integration">API Integration</a></li>
+<li><a href="#setup--prerequisites">Setup &amp; Prerequisites</a></li>
+<li><a href="#development-guidelines">Development Guidelines</a></li>
+<li><a href="#deployment">Deployment</a></li>
+</ol>
+<hr />
+<h2 id="overview">Overview</h2>
+<p><strong>MFD Trace Fish</strong> is a comprehensive React Native
+mobile application designed for the Marine Fisheries Department (MFD) of
+Pakistan. The app facilitates fish traceability, trip management, and
+supply chain tracking across different stakeholders in the fishing
+industry.</p>
+<h3 id="key-information">Key Information</h3>
+<ul>
+<li><strong>App Name</strong>: MFD Trace Fish</li>
+<li><strong>Version</strong>: 0.0.1</li>
+<li><strong>Platform</strong>: React Native (iOS &amp; Android)</li>
+<li><strong>Target Audience</strong>: Fishermen, Middlemen, Exporters,
+MFD Staff, FCS Personnel</li>
+<li><strong>Primary Language</strong>: English with Urdu localization
+support</li>
+</ul>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<h3 id="technology-stack">Technology Stack</h3>
+<ul>
+<li><strong>Framework</strong>: React Native 0.80.2</li>
+<li><strong>Language</strong>: TypeScript 5.0.4</li>
+<li><strong>State Management</strong>: Redux with Redux Toolkit</li>
+<li><strong>Navigation</strong>: React Navigation 7.x</li>
+<li><strong>UI Components</strong>: React Native Paper</li>
+<li><strong>Storage</strong>: AsyncStorage for offline data</li>
+<li><strong>HTTP Client</strong>: Fetch API with custom wrapper</li>
+<li><strong>Internationalization</strong>: i18next</li>
+</ul>
+<h3 id="project-structure">Project Structure</h3>
+<pre><code>src/
+├── app/
+│   └── navigation/          # Navigation configuration
+├── components/              # Reusable UI components
+├── constants/               # App constants and dummy data
+├── db/                      # Database repositories
+├── i18n/                    # Internationalization setup
+├── locales/                 # Translation files (en.json, ur.json)
+├── offline/                 # Offline functionality
+├── provider/                # Context providers
+├── redux/                   # State management
+├── screens/                 # Screen components
+├── services/                # API services
+├── theme/                   # UI theme and colors
+└── utils/                   # Utility functions</code></pre>
+<hr />
+<h2 id="features-modules">Features &amp; Modules</h2>
+<h3 id="multi-role-authentication-system">1. Multi-Role Authentication
+System</h3>
+<ul>
+<li><strong>User Types</strong>: Fisherman, Middleman, Exporter, MFD
+Staff, FCS</li>
+<li><strong>Authentication</strong>: JWT-based token authentication</li>
+<li><strong>Session Management</strong>: Persistent login with token
+storage</li>
+<li><strong>Role-based Access</strong>: Different UI and features per
+user role</li>
+</ul>
+<h3 id="trip-management">2. Trip Management</h3>
+<ul>
+<li><strong>Trip Creation</strong>: Create new fishing trips with
+detailed information</li>
+<li><strong>Trip Tracking</strong>: Real-time trip status updates</li>
+<li><strong>GPS Integration</strong>: Location tracking and
+coordinates</li>
+<li><strong>Trip History</strong>: Complete trip records and
+analytics</li>
+</ul>
+<h3 id="fishing-activities">3. Fishing Activities</h3>
+<ul>
+<li><strong>Activity Recording</strong>: Record fishing activities with
+GPS coordinates</li>
+<li><strong>Equipment Details</strong>: Track fishing gear and
+equipment</li>
+<li><strong>Species Recording</strong>: Record fish species with lot
+numbers</li>
+<li><strong>Photo Capture</strong>: Image capture for documentation</li>
+</ul>
+<h3 id="boat-management">4. Boat Management</h3>
+<ul>
+<li><strong>Boat Registration</strong>: Register and manage fishing
+vessels</li>
+<li><strong>Boat Details</strong>: Complete boat information and
+specifications</li>
+<li><strong>Maintenance Records</strong>: Track boat maintenance and
+repairs</li>
+</ul>
+<h3 id="supply-chain-management">5. Supply Chain Management</h3>
+<ul>
+<li><strong>Distributions</strong>: Manage fish distributions</li>
+<li><strong>Purchases</strong>: Track fish purchases and
+transactions</li>
+<li><strong>Assignments</strong>: Manage fisherman assignments</li>
+<li><strong>Records</strong>: Complete traceability records</li>
+</ul>
+<h3 id="offline-functionality">6. Offline Functionality</h3>
+<ul>
+<li><strong>Offline Data Entry</strong>: Work without internet
+connection</li>
+<li><strong>Data Synchronization</strong>: Automatic sync when
+online</li>
+<li><strong>Queue Management</strong>: Intelligent offline queue
+system</li>
+<li><strong>Conflict Resolution</strong>: Handle data conflicts during
+sync</li>
+</ul>
+<hr />
+<h2 id="user-roles-authentication">User Roles &amp; Authentication</h2>
+<h3 id="user-types">User Types</h3>
+<h4 id="fisherman">1. Fisherman</h4>
+<ul>
+<li><strong>Primary Functions</strong>: Trip management, fishing
+activities, boat registration</li>
+<li><strong>Key Features</strong>:
+<ul>
+<li>Create and manage fishing trips</li>
+<li>Record fishing activities with GPS</li>
+<li>Register and manage boats</li>
+<li>Track fish species and lots</li>
+<li>Offline data entry</li>
+</ul></li>
+</ul>
+<h4 id="middleman">2. Middleman</h4>
+<ul>
+<li><strong>Primary Functions</strong>: Distribution management,
+purchase tracking</li>
+<li><strong>Key Features</strong>:
+<ul>
+<li>Manage fish distributions</li>
+<li>Track purchases and transactions</li>
+<li>Handle assignments</li>
+<li>View lot details</li>
+</ul></li>
+</ul>
+<h4 id="exporter">3. Exporter</h4>
+<ul>
+<li><strong>Primary Functions</strong>: Export management, final product
+tracking</li>
+<li><strong>Key Features</strong>:
+<ul>
+<li>Manage export operations</li>
+<li>Track final products</li>
+<li>View purchase records</li>
+<li>Handle traceability forms</li>
+</ul></li>
+</ul>
+<h4 id="mfd-staff">4. MFD Staff</h4>
+<ul>
+<li><strong>Primary Functions</strong>: System administration,
+oversight</li>
+<li><strong>Key Features</strong>:
+<ul>
+<li>View all system data</li>
+<li>Manage distributions and purchases</li>
+<li>Handle assignments</li>
+<li>Access complete records</li>
+</ul></li>
+</ul>
+<h4 id="fcs-fisheries-control-system">5. FCS (Fisheries Control
+System)</h4>
+<ul>
+<li><strong>Primary Functions</strong>: Monitoring and control</li>
+<li><strong>Key Features</strong>:
+<ul>
+<li>Monitor trips and distributions</li>
+<li>Review pending approvals</li>
+<li>Access control system data</li>
+</ul></li>
+</ul>
+<h3 id="authentication-flow">Authentication Flow</h3>
+<ol type="1">
+<li>User enters credentials</li>
+<li>System validates with backend API</li>
+<li>JWT token received and stored</li>
+<li>User role determined and mapped</li>
+<li>Appropriate navigation stack loaded</li>
+<li>Session persisted for future use</li>
+</ol>
+<hr />
+<h2 id="screens-ui-components">Screens &amp; UI Components</h2>
+<h3 id="navigation-structure">Navigation Structure</h3>
+<h4 id="root-navigator">Root Navigator</h4>
+<ul>
+<li><strong>AuthStack</strong>: Login and registration screens</li>
+<li><strong>Role-based Stacks</strong>: Different navigation for each
+user role</li>
+</ul>
+<h4 id="fisherman-stack">Fisherman Stack</h4>
+<ul>
+<li><strong>FishermanHome</strong>: Dashboard with trip overview</li>
+<li><strong>AddTrip</strong>: Trip creation and management</li>
+<li><strong>Trips</strong>: Trip listing and history</li>
+<li><strong>Boats</strong>: Boat management screens</li>
+<li><strong>Activities</strong>: Fishing activity management</li>
+<li><strong>Profile</strong>: User profile management</li>
+</ul>
+<h4 id="mfd-staff-stack">MFD Staff Stack</h4>
+<ul>
+<li><strong>MFDStaffHome</strong>: Administrative dashboard</li>
+<li><strong>DistributionsList</strong>: Distribution management</li>
+<li><strong>PurchasesList</strong>: Purchase tracking</li>
+<li><strong>RecordsList</strong>: System records</li>
+<li><strong>BoatsList</strong>: Boat management</li>
+<li><strong>AssignmentsList</strong>: Assignment management</li>
+</ul>
+<h4 id="middleman-stack">Middleman Stack</h4>
+<ul>
+<li><strong>MiddleManHome</strong>: Middleman dashboard</li>
+<li><strong>Distributions</strong>: Distribution management</li>
+<li><strong>Purchases</strong>: Purchase tracking</li>
+<li><strong>Assignments</strong>: Assignment management</li>
+</ul>
+<h4 id="exporter-stack">Exporter Stack</h4>
+<ul>
+<li><strong>ExporterHome</strong>: Exporter dashboard</li>
+<li><strong>AllTrips</strong>: Trip viewing</li>
+<li><strong>PurchasesList</strong>: Purchase management</li>
+<li><strong>FinalProducts</strong>: Product management</li>
+<li><strong>TraceabilityForm</strong>: Traceability records</li>
+</ul>
+<h4 id="fcs-stack">FCS Stack</h4>
+<ul>
+<li><strong>FCSHome</strong>: FCS dashboard</li>
+<li><strong>TripsList</strong>: Trip monitoring</li>
+<li><strong>DistributionsList</strong>: Distribution monitoring</li>
+</ul>
+<h3 id="ui-components">UI Components</h3>
+<h4 id="common-components">Common Components</h4>
+<ul>
+<li><strong>BiText</strong>: Bilingual text component</li>
+<li><strong>LanguageSwitcher</strong>: Language toggle component</li>
+<li><strong>Bi</strong>: Bilingual wrapper component</li>
+</ul>
+<h4 id="screen-components">Screen Components</h4>
+<ul>
+<li><strong>Dashboard Cards</strong>: Role-specific dashboard cards</li>
+<li><strong>Action Tiles</strong>: Quick action buttons</li>
+<li><strong>Management Modules</strong>: Feature-specific modules</li>
+<li><strong>Status Indicators</strong>: Online/offline status</li>
+<li><strong>Loading States</strong>: Loading indicators and
+skeletons</li>
+</ul>
+<hr />
+<h2 id="offline-functionality-1">Offline Functionality</h2>
+<h3 id="offline-first-architecture">Offline-First Architecture</h3>
+<p>The app implements a comprehensive offline-first solution allowing
+users to work without internet connectivity.</p>
+<h3 id="key-features">Key Features</h3>
+<ol type="1">
+<li><strong>Offline Data Entry</strong>: Create trips, activities, and
+records offline</li>
+<li><strong>Intelligent Queue System</strong>: Automatic queuing of
+offline operations</li>
+<li><strong>Dependency Resolution</strong>: Proper handling of data
+dependencies</li>
+<li><strong>Automatic Sync</strong>: Background synchronization when
+online</li>
+<li><strong>Conflict Resolution</strong>: Handle data conflicts during
+sync</li>
+</ol>
+<h3 id="queue-system">Queue System</h3>
+<ul>
+<li><strong>Job Types</strong>: createTrip, startTrip, createActivity,
+createSpecies, completeActivity</li>
+<li><strong>Dependency Management</strong>: Sequential processing with
+proper dependencies</li>
+<li><strong>Retry Logic</strong>: Exponential backoff for failed
+operations</li>
+<li><strong>Persistent Storage</strong>: AsyncStorage for queue
+persistence</li>
+</ul>
+<h3 id="id-generation">ID Generation</h3>
+<ul>
+<li><strong>Trip IDs</strong>: TRIP-YYYYMMDD-XXX format</li>
+<li><strong>Activity IDs</strong>: ACT-YYYYMMDD-XXX format</li>
+<li><strong>Lot Numbers</strong>: LOT-YYYYMMDD-XXX format</li>
+<li><strong>Local IDs</strong>: LOCAL-TIMESTAMP-RANDOM for offline
+operations</li>
+</ul>
+<hr />
+<h2 id="api-integration">API Integration</h2>
+<h3 id="base-configuration">Base Configuration</h3>
+<ul>
+<li><strong>Base URL</strong>:
+https://smartaisoft.com/MFD-Trace-Fish/api</li>
+<li><strong>Authentication</strong>: Bearer token in Authorization
+header</li>
+<li><strong>Content Type</strong>: application/json</li>
+<li><strong>Error Handling</strong>: Comprehensive error handling with
+offline detection</li>
+</ul>
+<h3 id="service-modules">Service Modules</h3>
+<h4 id="authentication-services">Authentication Services</h4>
+<ul>
+<li><code>login()</code>: User authentication</li>
+<li><code>logout()</code>: Session termination</li>
+<li><code>loadSession()</code>: Session restoration</li>
+</ul>
+<h4 id="trip-services">Trip Services</h4>
+<ul>
+<li><code>createTrip()</code>: Create new trip</li>
+<li><code>startTrip()</code>: Start trip</li>
+<li><code>fetchTrips()</code>: Get trip list</li>
+<li><code>fetchTripById()</code>: Get trip details</li>
+</ul>
+<h4 id="activity-services">Activity Services</h4>
+<ul>
+<li><code>createFishingActivity()</code>: Create activity</li>
+<li><code>completeFishingActivity()</code>: Complete activity</li>
+<li><code>fetchActivities()</code>: Get activity list</li>
+</ul>
+<h4 id="species-services">Species Services</h4>
+<ul>
+<li><code>createFishSpecies()</code>: Record fish species</li>
+<li><code>fetchSpecies()</code>: Get species list</li>
+</ul>
+<h4 id="mfd-services">MFD Services</h4>
+<ul>
+<li><code>fetchMFDDistributions()</code>: Get distributions</li>
+<li><code>fetchMFDPurchases()</code>: Get purchases</li>
+<li><code>fetchMFDRecords()</code>: Get records</li>
+<li><code>fetchMFDBoats()</code>: Get boats</li>
+<li><code>fetchMFDAssignments()</code>: Get assignments</li>
+</ul>
+<hr />
+<h2 id="setup-prerequisites">Setup &amp; Prerequisites</h2>
+<h3 id="system-requirements">System Requirements</h3>
+<ul>
+<li><strong>Node.js</strong>: &gt;= 18.0.0</li>
+<li><strong>React Native CLI</strong>: Latest version</li>
+<li><strong>Android Studio</strong>: For Android development</li>
+<li><strong>Xcode</strong>: For iOS development (macOS only)</li>
+<li><strong>CocoaPods</strong>: For iOS dependencies</li>
+</ul>
+<h3 id="development-environment-setup">Development Environment
+Setup</h3>
+<h4 id="clone-repository">1. Clone Repository</h4>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>repository-url<span class="op">&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> MFDTraceFish</span></code></pre></div>
+<h4 id="install-dependencies">2. Install Dependencies</h4>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># or</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">yarn</span> install</span></code></pre></div>
+<h4 id="ios-setup-macos-only">3. iOS Setup (macOS only)</h4>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ios</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">bundle</span> install</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">bundle</span> exec pod install</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ..</span></code></pre></div>
+<h4 id="android-setup">4. Android Setup</h4>
+<ul>
+<li>Install Android Studio</li>
+<li>Configure Android SDK</li>
+<li>Set up Android emulator or connect device</li>
+</ul>
+<h3 id="environment-configuration">Environment Configuration</h3>
+<h4 id="api-configuration">1. API Configuration</h4>
+<p>Update <code>src/services/https.ts</code>:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode typescript"><code class="sourceCode typescript"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">const</span> BASE_URL <span class="op">=</span> <span class="st">&#39;https://your-api-endpoint.com/api&#39;</span><span class="op">;</span></span></code></pre></div>
+<h4 id="build-configuration">2. Build Configuration</h4>
+<ul>
+<li><strong>Android</strong>: Update
+<code>android/app/build.gradle</code></li>
+<li><strong>iOS</strong>: Update
+<code>ios/MFDTraceFish/Info.plist</code></li>
+</ul>
+<h3 id="running-the-application">Running the Application</h3>
+<h4 id="development-mode">Development Mode</h4>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Start Metro bundler</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> start</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run on Android</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run android</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run on iOS</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run ios</span></code></pre></div>
+<h4 id="production-build">Production Build</h4>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Android</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> android</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="ex">./gradlew</span> assembleRelease</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># iOS</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Use Xcode to build and archive</span></span></code></pre></div>
+<hr />
+<h2 id="development-guidelines">Development Guidelines</h2>
+<h3 id="code-structure">Code Structure</h3>
+<ul>
+<li><strong>TypeScript</strong>: Strict type checking enabled</li>
+<li><strong>ESLint</strong>: Code linting and formatting</li>
+<li><strong>Prettier</strong>: Code formatting</li>
+<li><strong>Component Organization</strong>: Feature-based
+organization</li>
+</ul>
+<h3 id="state-management">State Management</h3>
+<ul>
+<li><strong>Redux</strong>: Centralized state management</li>
+<li><strong>Redux Thunk</strong>: Async action handling</li>
+<li><strong>Redux Persist</strong>: State persistence</li>
+<li><strong>Type Safety</strong>: Full TypeScript integration</li>
+</ul>
+<h3 id="uiux-guidelines">UI/UX Guidelines</h3>
+<ul>
+<li><strong>Material Design</strong>: React Native Paper components</li>
+<li><strong>Consistent Theming</strong>: Centralized color palette</li>
+<li><strong>Responsive Design</strong>: Adaptive layouts</li>
+<li><strong>Accessibility</strong>: Screen reader support</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><strong>Jest</strong>: Unit testing framework</li>
+<li><strong>React Native Testing Library</strong>: Component
+testing</li>
+<li><strong>Test Files</strong>: Located in <code>__tests__/</code>
+directory</li>
+</ul>
+<hr />
+<h2 id="deployment">Deployment</h2>
+<h3 id="android-deployment">Android Deployment</h3>
+<h4 id="generate-release-apk">1. Generate Release APK</h4>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> android</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">./gradlew</span> assembleRelease</span></code></pre></div>
+<h4 id="sign-apk-if-not-already-signed">2. Sign APK (if not already
+signed)</h4>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">jarsigner</span> <span class="at">-verbose</span> <span class="at">-sigalg</span> SHA1withRSA <span class="at">-digestalg</span> SHA1 <span class="at">-keystore</span> your-release-key.keystore app-release-unsigned.apk alias_name</span></code></pre></div>
+<h4 id="align-apk">3. Align APK</h4>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">zipalign</span> <span class="at">-v</span> 4 app-release-unsigned.apk app-release.apk</span></code></pre></div>
+<h3 id="ios-deployment">iOS Deployment</h3>
+<h4 id="archive-in-xcode">1. Archive in Xcode</h4>
+<ul>
+<li>Open <code>ios/MFDTraceFish.xcworkspace</code></li>
+<li>Select “Any iOS Device” as target</li>
+<li>Product → Archive</li>
+</ul>
+<h4 id="upload-to-app-store">2. Upload to App Store</h4>
+<ul>
+<li>Use Xcode Organizer</li>
+<li>Follow App Store Connect guidelines</li>
+</ul>
+<h3 id="environment-specific-builds">Environment-Specific Builds</h3>
+<h4 id="development">Development</h4>
+<ul>
+<li>Debug mode enabled</li>
+<li>API endpoints point to development server</li>
+<li>Logging enabled</li>
+</ul>
+<h4 id="production">Production</h4>
+<ul>
+<li>Release mode</li>
+<li>API endpoints point to production server</li>
+<li>Logging minimized</li>
+<li>Code obfuscation enabled</li>
+</ul>
+<hr />
+<h2 id="security-considerations">Security Considerations</h2>
+<h3 id="data-protection">Data Protection</h3>
+<ul>
+<li><strong>JWT Tokens</strong>: Secure token storage</li>
+<li><strong>API Security</strong>: HTTPS only communication</li>
+<li><strong>Data Encryption</strong>: Sensitive data encryption</li>
+<li><strong>Input Validation</strong>: Client and server-side
+validation</li>
+</ul>
+<h3 id="authentication-security">Authentication Security</h3>
+<ul>
+<li><strong>Token Expiration</strong>: Automatic token refresh</li>
+<li><strong>Session Management</strong>: Secure session handling</li>
+<li><strong>Role-based Access</strong>: Proper authorization checks</li>
+</ul>
+<hr />
+<h2 id="performance-optimization">Performance Optimization</h2>
+<h3 id="app-performance">App Performance</h3>
+<ul>
+<li><strong>Lazy Loading</strong>: Component lazy loading</li>
+<li><strong>Image Optimization</strong>: Optimized image handling</li>
+<li><strong>Memory Management</strong>: Proper cleanup and garbage
+collection</li>
+<li><strong>Bundle Size</strong>: Optimized bundle size</li>
+</ul>
+<h3 id="network-optimization">Network Optimization</h3>
+<ul>
+<li><strong>Request Caching</strong>: Intelligent caching strategy</li>
+<li><strong>Offline Support</strong>: Reduced network dependency</li>
+<li><strong>Data Compression</strong>: Compressed API responses</li>
+</ul>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="common-issues">Common Issues</h3>
+<h4 id="metro-bundler-issues">1. Metro Bundler Issues</h4>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clear Metro cache</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npx</span> react-native start <span class="at">--reset-cache</span></span></code></pre></div>
+<h4 id="ios-build-issues">2. iOS Build Issues</h4>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean and reinstall pods</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ios</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span> <span class="at">-rf</span> Pods</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span> Podfile.lock</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="ex">bundle</span> exec pod install</span></code></pre></div>
+<h4 id="android-build-issues">3. Android Build Issues</h4>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean Android build</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> android</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="ex">./gradlew</span> clean</span></code></pre></div>
+<h4 id="network-issues">4. Network Issues</h4>
+<ul>
+<li>Check API endpoint configuration</li>
+<li>Verify network connectivity</li>
+<li>Check authentication tokens</li>
+</ul>
+<h3 id="debug-information">Debug Information</h3>
+<ul>
+<li><strong>Console Logging</strong>: Enable debug logging in
+development</li>
+<li><strong>Network Monitoring</strong>: Monitor API requests and
+responses</li>
+<li><strong>Error Tracking</strong>: Comprehensive error logging</li>
+</ul>
+<hr />
+<h2 id="future-enhancements">Future Enhancements</h2>
+<h3 id="planned-features">Planned Features</h3>
+<ol type="1">
+<li><strong>Real-time Notifications</strong>: Push notifications for
+updates</li>
+<li><strong>Advanced Analytics</strong>: Detailed reporting and
+analytics</li>
+<li><strong>Multi-language Support</strong>: Additional language
+support</li>
+<li><strong>Offline Maps</strong>: Offline map functionality</li>
+<li><strong>Biometric Authentication</strong>: Fingerprint/Face ID
+support</li>
+</ol>
+<h3 id="technical-improvements">Technical Improvements</h3>
+<ol type="1">
+<li><strong>Performance Optimization</strong>: Further performance
+improvements</li>
+<li><strong>Code Splitting</strong>: Dynamic imports for better
+performance</li>
+<li><strong>Testing Coverage</strong>: Increased test coverage</li>
+<li><strong>Documentation</strong>: Enhanced documentation and
+guides</li>
+</ol>
+<hr />
+<h2 id="support-maintenance">Support &amp; Maintenance</h2>
+<h3 id="development-team">Development Team</h3>
+<ul>
+<li><strong>Lead Developer</strong>: [Name]</li>
+<li><strong>Backend Developer</strong>: [Name]</li>
+<li><strong>UI/UX Designer</strong>: [Name]</li>
+<li><strong>QA Engineer</strong>: [Name]</li>
+</ul>
+<h3 id="contact-information">Contact Information</h3>
+<ul>
+<li><strong>Email</strong>: [support-email]</li>
+<li><strong>Phone</strong>: [support-phone]</li>
+<li><strong>Documentation</strong>: [docs-url]</li>
+</ul>
+<h3 id="version-history">Version History</h3>
+<ul>
+<li><strong>v0.0.1</strong>: Initial release with core
+functionality</li>
+<li><strong>Future versions</strong>: See changelog for updates</li>
+</ul>
+<hr />
+<h2 id="conclusion">Conclusion</h2>
+<p>The MFD Trace Fish mobile application represents a comprehensive
+solution for fish traceability and supply chain management in Pakistan’s
+marine fisheries sector. With its robust offline functionality,
+multi-role support, and comprehensive feature set, it provides an
+essential tool for stakeholders across the fishing industry.</p>
+<p>The application’s architecture ensures scalability, maintainability,
+and reliability, while its user-friendly interface makes it accessible
+to users with varying technical expertise. The offline-first approach
+ensures that fishermen can continue their work even in areas with poor
+connectivity, making it a practical solution for real-world usage.</p>
+<p>For technical support, feature requests, or bug reports, please
+contact the development team through the provided channels.</p>
+<hr />
+<p><em>This documentation is maintained by the MFD Trace Fish
+development team and is updated regularly to reflect the current state
+of the application.</em></p>
+</body>
+</html>

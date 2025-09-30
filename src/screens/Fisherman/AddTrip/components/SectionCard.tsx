@@ -2,6 +2,7 @@
 import React, { PropsWithChildren } from 'react';
 import { View, Text } from 'react-native';
 import { s } from '../styles';
+import { Bi } from '../../../../components/Bi';
 
 type Props = PropsWithChildren<{ title: string; subtitle?: string }>;
 

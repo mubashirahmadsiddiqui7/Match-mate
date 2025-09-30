@@ -165,5 +165,8 @@ export const s = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     backgroundColor: '#fff',
+    zIndex: 1000,
+    elevation: 5,
+    minHeight: 48,
   },
 });

@@ -11,7 +11,10 @@ import {
   StatusBar,
   Platform,
   StyleSheet,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
@@ -19,8 +22,8 @@ import {
   onQueueChange,
   processOne,
   processQueue,
-  removeQueued,
-  type QueuedTrip,
+  removeCascade,
+  type QueueJob,
 } from '../../../offline/TripQueues';
 
 const PALETTE = {
@@ -47,7 +50,6 @@ function fmtLocal(ts?: number | null) {
   if (!ts) return '-';
   try { return new Date(ts).toLocaleString(); } catch { return String(ts); }
 }
-
 function msToShort(ms: number) {
   if (ms <= 0) return 'now';
   const s = Math.floor(ms / 1000);
@@ -57,7 +59,6 @@ function msToShort(ms: number) {
   if (m > 0) return `${m}m ${s % 60}s`;
   return `${s}s`;
 }
-
 function useTick(ms = 1000) {
   const [, setT] = useState(0);
   useEffect(() => {
@@ -67,7 +68,15 @@ function useTick(ms = 1000) {
 }
 
 /* -------------------------- small UI atoms -------------------------- */
-function Chip({ icon, label, tone = 'default' }: { icon?: string; label: string; tone?: 'ok'|'warn'|'error'|'info'|'default' }) {
+function Chip({
+  icon,
+  label,
+  tone = 'default',
+}: {
+  icon?: string;
+  label: string;
+  tone?: 'ok' | 'warn' | 'error' | 'info' | 'default';
+}) {
   const bg =
     tone === 'ok' ? '#E8F5E9' :
     tone === 'warn' ? '#FFF4E5' :
@@ -88,56 +97,101 @@ function Chip({ icon, label, tone = 'default' }: { icon?: string; label: string;
 
 /* -------------------------- main screen -------------------------- */
 export default function OfflineQueueScreen({ navigation }: any) {
-  const [items, setItems] = useState<QueuedTrip[]>([]);
+  const [items, setItems] = useState<QueueJob[]>([]);
   const [online, setOnline] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState('');
-  const listRef = useRef<FlatList<QueuedTrip>>(null);
+  const listRef = useRef<FlatList<QueueJob>>(null);
 
   // tick every second to refresh countdown labels
   useTick(1000);
 
+  // subscribe to queue & connectivity
   useEffect(() => {
     const unsubQ = onQueueChange(setItems);
-    const unsubN = NetInfo.addEventListener(s => setOnline(!!s.isConnected));
-    NetInfo.fetch().then(s => setOnline(!!s.isConnected)).catch(() => {});
-    return () => { unsubQ(); unsubN && unsubN(); };
-  }, []);
 
-  
+    const unsubNet = NetInfo.addEventListener(s => {
+      const nowOnline = !!s.isConnected;
+      setOnline(nowOnline);
+      // If we just came online, try to flush queue
+      if (nowOnline) processQueue().catch(() => {});
+    });
+
+    // initial state
+    NetInfo.fetch()
+      .then(s => setOnline(!!s.isConnected))
+      .catch(() => {});
+
+    // also retry when app returns to foreground
+    const onAppStateChange = (st: AppStateStatus) => {
+      if (st === 'active') {
+        NetInfo.fetch().then(s => {
+          if (s.isConnected) processQueue().catch(() => {});
+        });
+      }
+    };
+    const appSub = AppState.addEventListener('change', onAppStateChange);
+
+    return () => {
+      unsubQ();
+      unsubNet && unsubNet();
+      appSub.remove();
+    };
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { setItems(await getQueuedItems()); } finally { setRefreshing(false); }
+    try {
+      setItems(await getQueuedItems());
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   const handleBack = useCallback(() => {
-    if (navigation?.canGoBack?.()) navigation.goBack();
+    // Always land on FishermanHome when leaving Offline screen
+    navigation.reset({ index: 0, routes: [{ name: 'FishermanHome' }] });
   }, [navigation]);
 
   const handleProcessAll = useCallback(async () => {
     if (!online) {
-      Alert.alert('Offline', 'You are not connected. Items will auto‑submit when internet returns.');
+      Alert.alert('Offline', 'You are not connected. Items will auto-submit when internet returns.');
       return;
     }
     await processQueue();
   }, [online]);
 
-  const handleSubmitNow = useCallback(async (localId: string) => {
-    if (!online) {
-      Alert.alert('Offline', 'No internet. This form will submit automatically when back online.');
+  const handleSubmitNow = useCallback(
+    async (localId: string) => {
+      if (!online) {
+        Alert.alert('Offline', 'No internet. This form will submit automatically when back online.');
+        return;
+      }
+      const ok = await processOne(localId);
+      if (ok) Alert.alert('Submitted', 'Form was submitted successfully.');
+      else
+        Alert.alert(
+          'Deferred',
+          'Could not submit now. It will retry automatically with backoff.',
+        );
+    },
+    [online],
+  );
+
+  const handleDelete = useCallback(async (item: QueueJob) => {
+    const isParent = item.type === 'createTrip';
+    if (!isParent) {
+      Alert.alert('Not allowed', 'Only parent Trip requests can be deleted. Delete the Trip to remove its dependent actions.');
       return;
     }
-    const ok = await processOne(localId);
-    if (ok) Alert.alert('Submitted', 'Form was submitted successfully.');
-    else Alert.alert('Deferred', 'Could not submit now. It will retry automatically with backoff.');
-  }, [online]);
-
-  const handleDelete = useCallback(async (localId: string) => {
-    Alert.alert('Remove form?', 'This will delete the offline form from your device.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => removeQueued(localId) },
-    ]);
+    Alert.alert(
+      'Remove trip and its actions?',
+      'This will delete the offline trip form and all dependent actions (start, activities, species, completion).',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => removeCascade(item.localId) },
+      ],
+    );
   }, []);
 
   const filtered = useMemo(() => {
@@ -154,26 +208,80 @@ export default function OfflineQueueScreen({ navigation }: any) {
   const pendingCount = items.length;
   const oldestCreatedAt = items[0]?.createdAt;
 
-  const renderItem = ({ item, index }: { item: QueuedTrip; index: number }) => {
+  // Count queued createActivity items linked (directly or via chain) to a trip root localId
+  const countActivitiesForTripRoot = useCallback((rootLocalId: string) => {
+    // Build quick index
+    const byId = new Map<string, QueueJob>();
+    items.forEach(it => byId.set(it.localId, it));
+
+    function isChildOfRoot(node: QueueJob): boolean {
+      let current: QueueJob | undefined = node;
+      const seen = new Set<string>();
+      while (current && current.dependsOnLocalId) {
+        if (seen.has(current.dependsOnLocalId)) break;
+        seen.add(current.dependsOnLocalId);
+        if (current.dependsOnLocalId === rootLocalId) return true;
+        current = byId.get(current.dependsOnLocalId);
+      }
+      return false;
+    }
+
+    return items.filter(it => it.type === 'createActivity' && isChildOfRoot(it)).length;
+  }, [items]);
+
+  const renderItem = ({ item }: { item: QueueJob }) => {
     const b = item.body || {};
-    const title = b.trip_name || b.trip_id || item.localId;
-    const subtitle = [b.departure_port || b.port_location, b.destination_port].filter(Boolean).join(' → ');
+    const isTrip = item.type === 'createTrip';
+    const isStart = item.type === 'startTrip';
+    const isActivity = item.type === 'createActivity';
+    const isSpecies = item.type === 'createSpecies';
+    const isComplete = item.type === 'completeActivity';
+
+    const title = isTrip
+      ? (b.trip_name || b.trip_id || 'New Trip')
+      : isStart
+      ? 'Start Trip'
+      : isActivity
+      ? `Activity #${b.activity_number ?? b.activity_id ?? ''}`
+      : isSpecies
+      ? `Species: ${b.species_name ?? ''}`
+      : isComplete
+      ? 'Complete Activity'
+      : item.localId;
+
+    const contextLine = isTrip
+      ? [b.departure_port || b.port_location, b.destination_port].filter(Boolean).join(' → ')
+      : isActivity
+      ? `Trip: ${b.trip_id ?? '—'} • Mesh: ${b.mesh_size ?? '—'} • Net: ${b.net_length ?? '—'}×${b.net_width ?? '—'}`
+      : isSpecies
+      ? `Qty: ${b.quantity_kg ?? '—'} kg • Type: ${b.type ?? '—'}`
+      : isStart
+      ? `Trip: ${b.trip_id ?? '—'}`
+      : isComplete
+      ? `Activity: ${b.activity_id ?? b.activity_number ?? '—'}`
+      : '';
     const dueMs = (item.nextRetryAt ?? 0) - Date.now();
     const waiting = !!item.nextRetryAt && dueMs > 0;
+    const activityCount = isTrip ? countActivitiesForTripRoot(item.localId) : 0;
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, !isTrip && { borderStyle: 'dashed' }]}>
+        {/* Header */}
         <View style={styles.cardHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
             <View style={styles.avatar}>
               <Icon name="directions-boat" size={20} color="#fff" />
             </View>
+
             <View style={{ flex: 1 }}>
-              <Text style={styles.title} numberOfLines={1}>{title}</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>
-                {subtitle || 'Route not specified'}
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              <Text style={styles.subtitle} numberOfLines={2}>
+                {contextLine || '—'}
               </Text>
             </View>
+
             <Chip
               icon={online ? 'wifi' : 'wifi-off'}
               label={online ? 'Online' : 'Offline'}
@@ -182,46 +290,118 @@ export default function OfflineQueueScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Meta */}
         <View style={styles.metaRow}>
           <Chip icon="schedule" label={`Created ${fmtLocal(item.createdAt)}`} />
-          <Chip icon="repeat" label={`Attempts ${item.attempts}`} tone={item.attempts > 0 ? 'info' : 'default'} />
-          {waiting
-            ? <Chip icon="hourglass-bottom" label={`Retry in ${msToShort(dueMs)}`} tone="warn" />
-            : <Chip icon="play-arrow" label="Ready to submit" tone="ok" />}
+          <Chip
+            icon="repeat"
+            label={`Attempts ${item.attempts}`}
+            tone={item.attempts > 0 ? 'info' : 'default'}
+          />
+          {isTrip ? (
+            <Chip icon="format-list-bulleted" label={`Activities: ${activityCount}`} tone="info" />
+          ) : null}
+          {waiting ? (
+            <Chip
+              icon="hourglass-bottom"
+              label={`Retry in ${msToShort(dueMs)}`}
+              tone="warn"
+            />
+          ) : (
+            <Chip icon="play-arrow" label="Ready to submit" tone="ok" />
+          )}
         </View>
 
-        <View style={styles.actionsRow}>
-          <Pressable
-            onPress={() => handleSubmitNow(item.localId)}
-            android_ripple={{ color: '#ffffff30' }}
-            style={({ pressed }) => [
-              styles.btnPrimary,
-              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-            ]}
-          >
-            <Icon name="cloud-upload" size={18} color="#fff" />
-            <Text style={styles.btnPrimaryText}>Submit Now</Text>
-          </Pressable>
+        {/* Trip-only: delete container */}
+        {isTrip ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 }}>
+            <Pressable
+              onPress={() => handleDelete(item)}
+              android_ripple={{ color: '#00000010' }}
+              style={({ pressed }) => [
+                styles.deleteContainer,
+                pressed && { opacity: 0.9 },
+              ]}
+            >
+              <Icon name="delete-outline" size={16} color={PALETTE.error} />
+              <Text style={styles.deleteText}>Delete Trip</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-          <Pressable
-            onPress={() => handleDelete(item.localId)}
-            android_ripple={{ color: '#ffffff30' }}
-            style={({ pressed }) => [
-              styles.btnDanger,
-              pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-            ]}
-          >
-            <Icon name="delete-outline" size={18} color="#fff" />
-            <Text style={styles.btnDangerText}>Delete</Text>
-          </Pressable>
-        </View>
+        {/* Actions */}
+        {isTrip ? (
+          <>
+            <View style={styles.actionsRow}>
+              <Pressable
+                onPress={() => handleSubmitNow(item.localId)}
+                android_ripple={{ color: '#ffffff30' }}
+                style={({ pressed }) => [
+                  styles.btnPrimary,
+                  { flex: 1 },
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                  !online && { opacity: 0.6 },
+                ]}
+                disabled={!online}
+              >
+                <Icon name="cloud-upload" size={18} color="#fff" />
+                <Text style={styles.btnPrimaryText}>
+                  {online ? 'Submit Now' : 'Waiting for Internet'}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.actionsRow}>
+              <Pressable
+                onPress={() => {
+                  // @ts-ignore
+                  navigation.navigate('FishingActivity', {
+                    mode: 'create',
+                    tripId: String(b.trip_name || b.trip_id || item.localId),
+                    activityNo: activityCount + 1,
+                    meta: { id: item.localId, trip_id: b.trip_name || b.trip_id || item.localId },
+                  });
+                }}
+                android_ripple={{ color: '#ffffff30' }}
+                style={({ pressed }) => [
+                  styles.btnInfo,
+                  { flex: 1 },
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                ]}
+              >
+                <Icon name="add-circle-outline" size={18} color="#fff" />
+                <Text style={styles.btnPrimaryText}>Add Activity</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <View style={styles.actionsRow}>
+            <Pressable
+              onPress={() => handleSubmitNow(item.localId)}
+              android_ripple={{ color: '#ffffff30' }}
+              style={({ pressed }) => [
+                styles.btnPrimary,
+                { flex: 1 },
+                pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                !online && { opacity: 0.6 },
+              ]}
+              disabled={!online}
+            >
+              <Icon name="cloud-upload" size={18} color="#fff" />
+              <Text style={styles.btnPrimaryText}>
+                {online ? 'Submit Now' : 'Waiting for Internet'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: PALETTE.bg }}>
-      <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" />
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: APPBAR_BG }}>
+      <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" translucent={false} />
+
+      <View style={{ flex: 1, backgroundColor: PALETTE.bg }}>
 
       {/* App Bar */}
       <View style={styles.appbar}>
@@ -247,23 +427,51 @@ export default function OfflineQueueScreen({ navigation }: any) {
       </View>
 
       {/* Status strip */}
-      <View style={[styles.strip, { backgroundColor: online ? PALETTE.green50 : '#FFF7ED', borderColor: online ? '#C8E6C9' : '#FED7AA' }]}>
-        <Icon name={online ? 'wifi' : 'wifi-off'} size={18} color={online ? PALETTE.green700 : PALETTE.warn} />
-        <Text style={{ marginLeft: 8, color: online ? PALETTE.green700 : PALETTE.warn }}>
-          {online ? 'Online — queued forms will auto‑submit.' : 'Offline — forms will wait and submit later.'}
+      <View
+        style={[
+          styles.strip,
+          {
+            backgroundColor: online ? PALETTE.green50 : '#FFF7ED',
+            borderColor: online ? '#C8E6C9' : '#FED7AA',
+          },
+        ]}
+      >
+        <Icon
+          name={online ? 'wifi' : 'wifi-off'}
+          size={18}
+          color={online ? PALETTE.green700 : PALETTE.warn}
+        />
+        <Text
+          style={{
+            marginLeft: 8,
+            color: online ? PALETTE.green700 : PALETTE.warn,
+          }}
+        >
+          {online
+            ? 'Online — queued forms will auto-submit.'
+            : 'Offline — forms will wait and submit later.'}
         </Text>
       </View>
 
       {/* Search + stats */}
       <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
         <View style={styles.searchBox}>
-          <Icon name="search" size={20} color={PALETTE.text600} style={{ marginRight: 8 }} />
+          <Icon
+            name="search"
+            size={20}
+            color={PALETTE.text600}
+            style={{ marginRight: 8 }}
+          />
           <TextInput
             value={q}
             onChangeText={setQ}
             placeholder="Search by Trip ID / ports"
             placeholderTextColor={PALETTE.text600}
-            style={{ flex: 1, color: PALETTE.text900, paddingVertical: Platform.OS === 'ios' ? 8 : 4 }}
+            style={{
+              flex: 1,
+              color: PALETTE.text900,
+              paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+            }}
           />
           {!!q && (
             <Pressable onPress={() => setQ('')}>
@@ -274,7 +482,9 @@ export default function OfflineQueueScreen({ navigation }: any) {
 
         <View style={styles.statsRow}>
           <Chip icon="inbox" label={`Pending: ${pendingCount}`} />
-          {oldestCreatedAt ? <Chip icon="today" label={`Oldest: ${fmtLocal(oldestCreatedAt)}`} /> : null}
+          {oldestCreatedAt ? (
+            <Chip icon="today" label={`Oldest: ${fmtLocal(oldestCreatedAt)}`} />
+          ) : null}
         </View>
       </View>
 
@@ -286,17 +496,32 @@ export default function OfflineQueueScreen({ navigation }: any) {
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 28, paddingTop: 8 }}
         ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 48, paddingHorizontal: 24 }}>
+          <View
+            style={{
+              alignItems: 'center',
+              marginTop: 48,
+              paddingHorizontal: 24,
+            }}
+          >
             <Icon name="inbox" size={42} color={PALETTE.text600} />
-            <Text style={{ marginTop: 8, color: PALETTE.text700, fontWeight: '600' }}>No offline forms</Text>
-            <Text style={{ marginTop: 4, color: PALETTE.text600, textAlign: 'center' }}>
-              New forms created while offline will appear here and auto‑submit when you’re online.
+            <Text
+              style={{ marginTop: 8, color: PALETTE.text700, fontWeight: '600' }}
+            >
+              No offline forms
+            </Text>
+            <Text
+              style={{ marginTop: 4, color: PALETTE.text600, textAlign: 'center' }}
+            >
+              New forms created while offline will appear here and auto-submit when you’re online.
             </Text>
           </View>
         }
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
     </View>
+    </SafeAreaView>
   );
 }
 
@@ -304,8 +529,8 @@ export default function OfflineQueueScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   appbar: {
     backgroundColor: APPBAR_BG,
-    paddingTop: Platform.OS === 'android' ? 0 : 10,
-    height: 56 + (Platform.OS === 'ios' ? 10 : 0),
+    paddingTop: 0,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -389,7 +614,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     flex: 1,
   },
-  btnPrimaryText: { color: '#fff', fontWeight: '600' },
+  btnPrimaryText: { color: '#fff', fontWeight: '600',fontSize:12 },
+  btnInfo: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: PALETTE.info,
+    paddingVertical: 10, paddingHorizontal: 14,
+    borderRadius: 10,
+  },
   btnDanger: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: PALETTE.error,
@@ -397,4 +628,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   btnDangerText: { color: '#fff', fontWeight: '600' },
+  deleteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 999,
+  },
+  deleteText: { color: PALETTE.error, fontWeight: '700' },
 });

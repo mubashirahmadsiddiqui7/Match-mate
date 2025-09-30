@@ -1,11 +1,21 @@
 // src/redux/types.ts
-export type AppRole = 'fisherman' | 'middle_man' | 'exporter' | 'mfd_staff' | 'super_admin';
+export type AppRole =
+  | 'fisherman'
+  | 'middle_man'
+  | 'exporter'
+  | 'mfd_staff'
+  | 'fcs'
+  | 'super_admin';
 
 export interface AuthUser {
+  id: number; // NEW
+
   name: string;
   email: string;
   role: AppRole;
   token: string;
+    profile: any;               // NEW – raw server user object (or make a typed interface)
+
 }
 
 export type AuthState = {

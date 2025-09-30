@@ -20,6 +20,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MFDStaffStackParamList } from '../../app/navigation/stacks/MFDStaffStack';
 import { getTripCounts, type TripCounts } from '../../services/trips';
+import { getUser, type User } from '../../services/users';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Nav = NativeStackNavigationProp<MFDStaffStackParamList, 'MFDStaffHome'>;
 
@@ -44,11 +46,14 @@ const APPBAR_BG = '#1f720d';
 export default function MFDStaffHome() {
   const dispatch = useDispatch();
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
 
   const [online, setOnline] = useState<boolean>(true);
   const [counts, setCounts] = useState<TripCounts | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [errText, setErrText] = useState<string | null>(null);
 
   // Connectivity banner
@@ -58,15 +63,25 @@ export default function MFDStaffHome() {
     return () => { unsub && unsub(); };
   }, []);
 
-  const loadCounts = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setErrText(null);
     try {
-      const { totals } = await getTripCounts();
-      setCounts(totals);
+      const [tripCountsRes, userRes] = await Promise.allSettled([
+        getTripCounts(),
+        getUser(),
+      ]);
+
+      if (tripCountsRes.status === 'fulfilled') {
+        setCounts(tripCountsRes.value.totals);
+      }
+      if (userRes.status === 'fulfilled') {
+        setUser(userRes.value);
+      }
     } catch (e: any) {
-      setErrText(e?.message || 'Failed to load trip counts');
+      setErrText(e?.message || 'Failed to load data');
       setCounts(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -75,23 +90,31 @@ export default function MFDStaffHome() {
   // Reload when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      loadCounts();
-    }, [loadCounts])
+      loadData();
+    }, [loadData])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadCounts();
+      await loadData();
     } finally {
       setRefreshing(false);
     }
-  }, [loadCounts]);
+  }, [loadData]);
 
   const confirmLogout = useCallback(() => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => dispatch(logout()) },
+      { text: 'Logout', style: 'destructive', onPress: async () => {
+        try {
+          setIsLoggingOut(true);
+          await dispatch(logout() as any);
+        } finally {
+          // Screen will likely unmount on successful logout; safe guard for race conditions
+          setIsLoggingOut(false);
+        }
+      } },
     ]);
   }, [dispatch]);
 
@@ -99,22 +122,31 @@ export default function MFDStaffHome() {
     navigation.navigate('AllTrips');
   }, [navigation]);
 
-  const goReports = useCallback(() => {
-    // Replace with your actual screen name if different
-    navigation.navigate('Reports' as any);
-  }, [navigation]);
+  // Computed values from user data
+  const name = React.useMemo(() => {
+    return user?.name || user?.first_name || 'MFD Staff';
+  }, [user]);
+
+  // const goReports = useCallback(() => {
+  //   // Replace with your actual screen name if different
+  //   navigation.navigate('Reports' as any);
+  // }, [navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: PALETTE.bg }}>
       <StatusBar backgroundColor={APPBAR_BG} barStyle="light-content" />
 
       {/* App Bar */}
-      <View style={styles.appbar}>
+      <View style={[
+        styles.appbar,
+        { paddingTop: insets.top, height: 56 + insets.top }
+      ]}>
         <View style={styles.appbarSide} />
-        <Text style={styles.appbarTitle}>MFD Dashboard</Text>
+        <Text style={styles.appbarTitle}>MFD Dashboards</Text>
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.85 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [styles.iconBtn, (pressed || isLoggingOut) && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Logout"
         >
@@ -166,7 +198,7 @@ export default function MFDStaffHome() {
               <Icon name="anchor" size={22} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.h1}>Welcome back, MFD!</Text>
+              <Text style={styles.h1}>Welcome back, {name}!</Text>
               <Text style={styles.subtle}>
                 You’re logged into the Marine Fisheries Department Portal.
               </Text>
@@ -184,21 +216,32 @@ export default function MFDStaffHome() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Your Profile</Text>
 
-          <Row icon="person" label="Full Name" value="MFD Staff" />
-          <Row icon="mail" label="Email Address" value="mfd.staff@gmail.com" />
-          <Row icon="phone" label="Phone Number" value="03095237230" />
+          <Row icon="person" label="Full Name" value={name} />
+          <Row icon="mail" label="Email Address" value={user?.email || '—'} />
+          <Row icon="phone" label="Phone Number" value={user?.phone || '—'} />
 
           <View style={[styles.row, { marginTop: 8 }]}>
             <Icon name="verified" size={18} color={PALETTE.green700} style={{ marginRight: 10 }} />
             <Text style={styles.rowLabel}>Account Status</Text>
             <View style={{ flex: 1 }} />
-            <StatusPill text="Active" tone="ok" />
+            <StatusPill text={user?.is_active ? "Active" : "Inactive"} tone={user?.is_active ? "ok" : "error"} />
           </View>
 
           <View style={styles.divider} />
 
-          <Row icon="badge" label="Employee ID" value="ID-1515" />
-          <Row icon="apartment" label="Department/Position" value="Not specified" />
+          <Row icon="badge" label="Employee ID" value={user?.mfd_employee_id || '—'} />
+          <Row icon="apartment" label="Department/Position" value="MFD Staff" />
+          <Row icon="verified" label="Verification Status" value={user?.is_verified ? "Verified" : "Pending"} />
+          
+          {user?.address && (
+            <Row icon="home" label="Address" value={user.address} />
+          )}
+          {user?.city && (
+            <Row icon="location-city" label="City" value={user.city} />
+          )}
+          {user?.province && (
+            <Row icon="map" label="Province" value={user.province} />
+          )}
         </View>
 
         {/* Trip Overview */}
@@ -252,18 +295,100 @@ export default function MFDStaffHome() {
           </View>
         </View>
 
+        {/* MFD Management Modules */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>MFD Management</Text>
+          <Text style={styles.sectionSubtitle}>Access all MFD management functions</Text>
+
+          <View style={styles.managementGrid}>
+            <ManagementModule
+              title="Distributions"
+              subtitle="View all fish distributions"
+              icon="inventory"
+              color="#2196f3"
+              onPress={() => navigation.navigate('DistributionsList')}
+              actions={[
+                { label: 'View All', onPress: () => navigation.navigate('DistributionsList') },
+              ]}
+            />
+            
+            <ManagementModule
+              title="Purchases"
+              subtitle="View all fish purchases"
+              icon="shopping-cart"
+              color="#4caf50"
+              onPress={() => navigation.navigate('PurchasesList')}
+              actions={[
+                { label: 'View All', onPress: () => navigation.navigate('PurchasesList') },
+              ]}
+            />
+            
+            <ManagementModule
+              title="Records"
+              subtitle="View all system records"
+              icon="description"
+              color="#ff9800"
+              onPress={() => navigation.navigate('RecordsList')}
+              actions={[
+                { label: 'View All', onPress: () => navigation.navigate('RecordsList') },
+              ]}
+            />
+            
+            <ManagementModule
+              title="Boats"
+              subtitle="Manage boat information"
+              icon="directions-boat"
+              color="#9c27b0"
+              onPress={() => navigation.navigate('BoatsList')}
+              actions={[
+                { label: 'View All', onPress: () => navigation.navigate('BoatsList') },
+              ]}
+            />
+            
+            <ManagementModule
+              title="Assignments"
+              subtitle="Manage fisherman assignments"
+              icon="assignment"
+              color="#f44336"
+              onPress={() => navigation.navigate('AssignmentsList')}
+              actions={[
+                { label: 'View All', onPress: () => navigation.navigate('AssignmentsList') },
+                { label: 'Create New', onPress: () => navigation.navigate('AssignmentCreate') },
+              ]}
+            />
+          </View>
+        </View>
+
         {/* Logout (secondary) */}
         <Pressable
           onPress={confirmLogout}
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.9 }]}
+          disabled={isLoggingOut}
+          style={({ pressed }) => [
+            styles.logoutBtn,
+            (pressed || isLoggingOut) && { opacity: 0.9 }
+          ]}
         >
-          <Icon name="logout" size={18} color="#fff" />
-          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>Logout</Text>
+          {isLoggingOut ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Icon name="logout" size={18} color="#fff" />
+          )}
+          <Text style={{ color: '#fff', marginLeft: 8, fontWeight: '700' }}>
+            {isLoggingOut ? 'Logging out…' : 'Logout'}
+          </Text>
         </Pressable>
 
         {/* Footer space */}
         <View style={{ height: 16 }} />
       </ScrollView>
+      {isLoggingOut && (
+        <View style={styles.overlay}> 
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={PALETTE.green700} />
+            <Text style={{ marginTop: 10, color: PALETTE.text700, fontWeight: '600' }}>Signing you out…</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -387,12 +512,60 @@ function ActionTile({
   );
 }
 
+function ManagementModule({
+  title,
+  subtitle,
+  icon,
+  color,
+  onPress,
+  actions,
+}: {
+  title: string;
+  subtitle: string;
+  icon: string;
+  color: string;
+  onPress: () => void;
+  actions: Array<{ label: string; onPress: () => void }>;
+}) {
+  return (
+    <View style={[styles.managementModule, { borderLeftColor: color }]}>
+      <Pressable
+        style={styles.moduleHeader}
+        onPress={onPress}
+      >
+        <View style={[styles.moduleIcon, { backgroundColor: color + '20' }]}>
+          <Icon name={icon} size={24} color={color} />
+        </View>
+        <View style={styles.moduleContent}>
+          <Text style={styles.moduleTitle}>{title}</Text>
+          <Text style={styles.moduleSubtitle}>{subtitle}</Text>
+        </View>
+        <Icon name="chevron-right" size={20} color={PALETTE.text600} />
+      </Pressable>
+      
+      <View style={styles.moduleActions}>
+        {actions.map((action, index) => (
+          <Pressable
+            key={index}
+            style={[styles.actionButton, { borderColor: color }]}
+            onPress={action.onPress}
+          >
+            <Text style={[styles.actionButtonText, { color: color }]}>
+              {action.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /* -------------------- styles -------------------- */
 const styles = StyleSheet.create({
   appbar: {
     backgroundColor: APPBAR_BG,
-    paddingTop: Platform.OS === 'ios' ? 10 : 0,
-    height: 56 + (Platform.OS === 'ios' ? 10 : 0),
+    paddingTop: 0,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -444,6 +617,7 @@ const styles = StyleSheet.create({
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   sectionTitle: { color: PALETTE.text900, fontSize: 16, fontWeight: '800', flex: 1 },
+  sectionSubtitle: { color: PALETTE.text600, fontSize: 14, marginTop: 4 },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,6 +646,64 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   actionGrid: { marginTop: 10 },
+  managementGrid: { marginTop: 12, gap: 12 },
+  managementModule: {
+    backgroundColor: PALETTE.surface,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  moduleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  moduleIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  moduleContent: {
+    flex: 1,
+  },
+  moduleTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: PALETTE.text900,
+    marginBottom: 4,
+  },
+  moduleSubtitle: {
+    fontSize: 14,
+    color: PALETTE.text600,
+  },
+  moduleActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   tile: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,5 +732,24 @@ const styles = StyleSheet.create({
     backgroundColor: PALETTE.green700,
     alignItems: 'center', justifyContent: 'center',
     marginRight: 12,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayCard: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PALETTE.border,
+    alignItems: 'center',
   },
 });

@@ -1,5 +1,7 @@
 // src/services/fishSpecies.ts
-import { api } from './https';
+import { api, upload, unwrap } from './https';
+import RNFS from 'react-native-fs';
+import { Platform } from 'react-native';
 
 /** One species row */
 export type FishSpecies = {
@@ -14,30 +16,81 @@ export type FishSpecies = {
 };
 
 export type CreateFishSpeciesBody = {
-  /** Optional pretty codes (just for audit/logs on server) */
-  activity_code?: string | null; // e.g., "ACT-20250826-007"
-  trip_code?: string | null;     // e.g., "TRIP-20250826-009"
-
-  species_name: string;          // e.g., "Tuna"
-  quantity_kg: number;           // weight in KG
-  type: 'catch' | 'discard';  // classification
-  grade?: string | null;         // optional quality grade
-  notes?: string | null;         // optional free text
+  // Server validator expects these names
+  species_name: string;                 // required
+  quantity?: number;                    // preferred key
+  quantity_kg?: number;                 // legacy support; will be mapped to quantity
+  type: 'catch' | 'discard';            // required
+  grade?: 'A' | 'B' | 'C' | 'D' | null; // optional
+  notes?: string | null;                // optional
+  // Any additional client-only fields are ignored
+  [extra: string]: any;
 };
 
-function unwrap<T>(j: any): T {
-  return (j?.data ?? j) as T;
-}
+export type UploadablePhoto = {
+  uri: string;
+  name?: string;
+  type?: string;
+};
 
 /** Create species for an activity */
 export async function createFishSpecies(
   fishingActivityId: number | string,
   body: CreateFishSpeciesBody,
 ) {
-  const json = await api(
-    `/fishing-activities/${fishingActivityId}/add-fish-species`,
-    { method: 'POST', body },
-  );
+  const payload = {
+    fishing_activity_id: fishingActivityId,
+    species_name: body.species_name,
+    // Send both keys to satisfy varying server validators
+    quantity_kg: body.quantity_kg ?? body.quantity ?? 0,
+    quantity: body.quantity ?? body.quantity_kg ?? 0,
+    type: body.type,
+    grade: body.grade ?? null,
+    notes: body.notes ?? null,
+  };
+  const json = await api(`/fishing-activities/${fishingActivityId}/add-fish-species`, {
+    method: 'POST',
+    body: payload,
+  });
+  return unwrap<FishSpecies>(json);
+}
+
+/** Create species with photos using multipart form-data (server expects file uploads). */
+export async function createFishSpeciesWithPhotos(
+  fishingActivityId: number | string,
+  body: CreateFishSpeciesBody,
+  photos: UploadablePhoto[],
+) {
+  console.log('[FishSpecies] Preparing multipart upload for', photos.length, 'photos');
+
+  const form = new FormData();
+
+  // Required fields
+  form.append('fishing_activity_id', String(fishingActivityId));
+  form.append('species_name', body.species_name);
+  form.append('quantity_kg', String(body.quantity_kg ?? body.quantity ?? 0));
+  form.append('quantity', String(body.quantity ?? body.quantity_kg ?? 0));
+  form.append('type', body.type);
+  if (body.grade != null) form.append('grade', String(body.grade));
+  if (body.notes != null) form.append('notes', String(body.notes));
+  if ((body as any).activity_code) form.append('activity_code', String((body as any).activity_code));
+  if ((body as any).trip_code) form.append('trip_code', String((body as any).trip_code));
+
+  // Photos [] (server validates photos.0 as image)
+  for (let i = 0; i < photos.length; i++) {
+    const p = photos[i];
+    if (!p?.uri) continue;
+    const uri = p.uri.startsWith('file://') || p.uri.startsWith('content://') ? p.uri : `file://${p.uri}`;
+    const name = p.name || uri.split('/').pop() || `photo_${i}.jpg`;
+    const type = p.type || (name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+    // iOS requires stripping file:// sometimes; RN handles both
+    form.append('photos[]', { uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri, name, type } as any);
+  }
+
+  console.log('[FishSpecies] Multipart form ready. Fields appended, sending upload...');
+
+  const json = await upload(`/fishing-activities/${fishingActivityId}/add-fish-species`, form);
+  console.log('[FishSpecies] API response received');
   return unwrap<FishSpecies>(json);
 }
 

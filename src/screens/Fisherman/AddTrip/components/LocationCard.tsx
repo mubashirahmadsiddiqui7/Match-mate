@@ -1,6 +1,6 @@
 // src/screens/Fisherman/AddTrip/components/LocationCard.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { s } from '../styles';
 
 type Props = {
@@ -23,13 +23,18 @@ export default function LocationCard({ gps, loading, onRecapture }: Props) {
       )}
 
       <TouchableOpacity
-        style={[s.buttonSecondary, loading && s.buttonDisabled]}
+        style={[s.buttonSecondary, loading && s.buttonDisabled, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
         onPress={onRecapture}
         disabled={loading}
       >
-        <Text style={s.buttonSecondaryText}>
-          {loading ? 'Getting location…' : 'Capture/Refresh Location'}
-        </Text>
+        {loading ? (
+          <>
+            <ActivityIndicator size="small" color="#1f720d" />
+            <Text style={s.buttonSecondaryText}>Getting location…</Text>
+          </>
+        ) : (
+          <Text style={s.buttonSecondaryText}>Capture/Refresh Location</Text>
+        )}
       </TouchableOpacity>
     </View>
   );

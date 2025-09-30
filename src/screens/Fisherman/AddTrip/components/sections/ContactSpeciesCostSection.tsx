@@ -5,20 +5,6 @@ export default function ContactSpeciesCostSection() {
   return (
     <>
       <TextField
-        name="emergencyContact"
-        label="Emergency Contact"
-        placeholder="Contact Number"
-        keyboardType="phone-pad"
-      />
-
-      <TextField
-        name="targetSpecies"
-        label="Target Species"
-        placeholder="e.g., Tuna, Mackerel"
-        rules={{ required: 'Target species is required' }}
-      />
-
-      <TextField
         name="crewCount"
         label="Total crew members (1–50)"
         placeholder="e.g., 5"
@@ -34,24 +20,11 @@ export default function ContactSpeciesCostSection() {
           },
         }}
       />
-{/* 
       <TextField
-        name="fuelCost"
-        label="Fuel Cost (Rs)"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-      /> */}
-      <TextField
-        name="estimatedCatch"
-        label="Estimated Catch weight (kg)"
-        placeholder="0"
-        keyboardType="numeric"
-      />
-      <TextField
-        name="equipmentCost"
-        label="Operational Cost (Rs)"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
+        name="emergencyContact"
+        label="Emergency Contact"
+        placeholder="Contact Number"
+        keyboardType="phone-pad"
       />
     </>
   );

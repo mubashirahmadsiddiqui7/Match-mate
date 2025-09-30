@@ -17,7 +17,9 @@ import {
   Text,
   TextInput,
   View,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -139,7 +141,9 @@ export default function FishingActivitiesListScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#1B5E20' }}>
+      <StatusBar backgroundColor="#1B5E20" barStyle="light-content" translucent={false} />
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable
@@ -227,7 +231,8 @@ export default function FishingActivitiesListScreen() {
           }
         />
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

@@ -6,7 +6,7 @@ export type CreateFishingActivityBody = {
   activity_number: number; // 1..20
   time_of_netting: string | null; // "HH:mm" 24h or null
   time_of_hauling: string | null; // "HH:mm" 24h or null
-  mesh_size: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | null;
+  mesh_size: number | null; // 1..50 (slider)
   net_length: number | null; // meters
   net_width: number | null; // meters
   gps_latitude: number; // -90..90
