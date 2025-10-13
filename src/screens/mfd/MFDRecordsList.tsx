@@ -23,6 +23,7 @@ import RNFS from 'react-native-fs';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import { MFDStackParamList } from '../../app/navigation/stacks/MFDStack';
 import Toast from 'react-native-toast-message';
+import FileViewer from 'react-native-file-viewer';
 
 type Nav = NativeStackNavigationProp<MFDStackParamList>;
 
@@ -492,18 +493,29 @@ export default function MFDRecordsList() {
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           const fileName = `traceability-${record.document_no}-${timestamp}.pdf`;
 
-          // Save directly to Downloads folder - simple and user-friendly
-          const downloadPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+          // Save to app's external files directory (works with FileProvider)
+          // This allows FileViewer to open files on all Android versions including 14+
+          const appFilesPath = `${RNFS.ExternalDirectoryPath}/${fileName}`;
           
           try {
-            // Ensure Downloads directory exists
-            const downloadDirExists = await RNFS.exists(RNFS.DownloadDirectoryPath);
-            if (!downloadDirExists) {
-              await RNFS.mkdir(RNFS.DownloadDirectoryPath);
+            // Ensure directory exists
+            const dirExists = await RNFS.exists(RNFS.ExternalDirectoryPath);
+            if (!dirExists) {
+              await RNFS.mkdir(RNFS.ExternalDirectoryPath);
             }
 
-            await RNFS.writeFile(downloadPath, base64PDF, 'base64');
-            console.log('✅ PDF saved successfully to Downloads:', downloadPath);
+            await RNFS.writeFile(appFilesPath, base64PDF, 'base64');
+            console.log('✅ PDF saved successfully:', appFilesPath);
+
+            // Also copy to public Downloads folder for easy access
+            const publicDownloadPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            try {
+              await RNFS.copyFile(appFilesPath, publicDownloadPath);
+              console.log('✅ PDF also copied to Downloads:', publicDownloadPath);
+            } catch (copyError) {
+              console.warn('Could not copy to Downloads:', copyError);
+              // Not critical, continue anyway
+            }
 
             // Success notification
             Toast.show({
@@ -514,53 +526,45 @@ export default function MFDRecordsList() {
               visibilityTime: 4000,
             });
 
-            // Simple success alert
+            // Success alert with Open File button (works on all Android versions with FileProvider)
             Alert.alert(
               'Download Complete',
-              `PDF document has been successfully saved to your Downloads folder!\n\n📄 File: ${fileName}\n📊 Size: ${(
+              `PDF document has been successfully saved!\n\n📄 File: ${fileName}\n📊 Size: ${(
                 pdfBlob.size / 1024
-              ).toFixed(1)} KB\n\nYou can now open it from your file manager or Downloads app.`,
+              ).toFixed(1)} KB\n\n💡 Also available in your Downloads folder.`,
               [
                 {
                   text: 'OK',
                   style: 'default',
                 },
+                {
+                  text: 'Open File',
+                  style: 'default',
+                  onPress: async () => {
+                    try {
+                      // FileViewer will use FileProvider on Android, enabling access on all versions
+                      await FileViewer.open(appFilesPath, {
+                        showOpenWithDialog: true,
+                        showAppsSuggestions: true,
+                      });
+                    } catch (error) {
+                      console.error('Error opening PDF:', error);
+                      Toast.show({
+                        type: 'error',
+                        text1: 'Cannot Open PDF',
+                        text2: 'No PDF viewer app found. Please install a PDF reader.',
+                        position: 'top',
+                      });
+                    }
+                  },
+                },
               ],
             );
-          } catch (downloadError) {
-            console.error('Failed to save to Downloads:', downloadError);
-            
-            // Fallback to app documents folder if Downloads fails
-            const fallbackPath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-            try {
-              await RNFS.writeFile(fallbackPath, base64PDF, 'base64');
-              console.log('✅ PDF saved to fallback location:', fallbackPath);
-              
-              Toast.show({
-                type: 'success',
-                text1: 'Download Complete! 🎉',
-                text2: `PDF saved to App Documents`,
-                position: 'top',
-                visibilityTime: 4000,
-              });
-              
-              Alert.alert(
-                'Download Complete',
-                `PDF document has been saved!\n\n📄 File: ${fileName}\n📊 Size: ${(
-                  pdfBlob.size / 1024
-                ).toFixed(1)} KB\n\nNote: Saved to app storage due to permission restrictions.`,
-                [
-                  {
-                    text: 'OK',
-                    style: 'default',
-                  },
-                ],
-              );
-            } catch (fallbackError) {
-              throw new Error(
-                'Failed to save PDF. Please check storage permissions.',
-              );
-            }
+          } catch (saveError) {
+            console.error('Failed to save PDF:', saveError);
+            throw new Error(
+              'Failed to save PDF. Please check storage permissions.',
+            );
           }
         } catch (writeError: any) {
           console.error('❌ Error saving PDF:', writeError);
